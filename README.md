@@ -30,21 +30,23 @@ be easy to add however.
 
 `psql2mysql` currenty provides two subcommands:
 
-* precheck
+* `precheck`
 
     Runs a couple of checks on the tables of the source database. Currently
     only searches all text columns for characters that are not compatible with
     the "utf8" encoding of MariaDB. Prints out the rows (and affected columns)
     that contains incompatible strings.
 
-* migrate
+* `migrate`
 
     Runs the acutal migration. Will go through, the database table by table
     and migrate all rows to the target database.
 
 ## Examples
 
-To check that it is actually possible to migrate run the `precheck` subcommand:
+To check that it is actually possible to migrate run the `precheck`
+subcommand:
+
 ```psql2mysql.py --source postgresql://neutron:secret@192.168.1.1/neutron precheck```
 
 To do the actual migraton:
@@ -56,6 +58,6 @@ To do the actual migraton:
 ```
 
 # Testing
-`psql2mysql.py` provides a couple of unit tests. To run the use:
+`psql2mysql.py` provides a couple of unit tests. To run the tests use:
 
 ```nosetests test-psql2mysql.py```
