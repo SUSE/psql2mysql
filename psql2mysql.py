@@ -70,6 +70,8 @@ class DbWrapper(object):
         incompatible_rows = []
         for row in rows:
             for col in stringColumns:
+                if type(row[col]) is not unicode:
+                    continue
                 if re.search(ur'[\U00010000-\U0010ffff]', row[col]):
                     incompatible_rows.append((col, row))
         return incompatible_rows
@@ -206,7 +208,7 @@ if __name__ == '__main__':
                    required=True,
                    help='connection URL to the src DB server'),
         cfg.StrOpt('target',
-                   required=True,
+                   required=False,
                    help='connection URL to the target server'),
     ]
 

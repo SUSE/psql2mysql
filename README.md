@@ -15,8 +15,8 @@ be easy to add however.
 # Usage
 
 ## Prerequisites
-* Before running `psql2mysql` the destination database and all its tables need
-  to exist already.
+* Before using `psql2mysql` for migration, the destination database and all
+  its tables need to exist already.
 * `psql2mysql` does not do any checks currently if the schema of the target
   and destination database are compatible. In the case of a migration of an
   OpenStack database it is assumed that the respective db_sync tool (e.g.
