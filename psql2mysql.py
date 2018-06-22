@@ -70,6 +70,8 @@ class DbWrapper(object):
         incompatible_rows = []
         for row in rows:
             for col in stringColumns:
+                if type(row[col]) is not unicode:
+                    continue
                 if re.search(ur'[\U00010000-\U0010ffff]', row[col]):
                     incompatible_rows.append((col, row))
         return incompatible_rows

@@ -66,7 +66,8 @@ class TestDbWrapper(unittest.TestCase):
         mock_utf8mb_rows.return_value = [
             { "name": u"tei\U0010ffffst", "id": 1},
             { "name": "name with Ä", "id": 2},
-            { "name": u"ascii name", "id": 3}
+            { "name": u"ascii name", "id": 3},
+            { "name": None, "id": 4}
         ]
         result = self.db_wrapper.scanTablefor4ByteUtf8Char(table)
         column, row = result[0]
