@@ -206,7 +206,7 @@ if __name__ == '__main__':
                    required=True,
                    help='connection URL to the src DB server'),
         cfg.StrOpt('target',
-                   required=True,
+                   required=False,
                    help='connection URL to the target server'),
     ]
 
