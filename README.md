@@ -14,6 +14,15 @@ be easy to add however.
 
 # Usage
 
+## Requirements
+
+* oslo.config
+* oslo.log
+* psycopg2
+* prettytable
+* pymsql
+* sqlalchemy
+
 ## Prerequisites
 * Before using `psql2mysql` for migration, the destination database and all
   its tables need to exist already.
