@@ -1,5 +1,21 @@
+before_script:
+  - psql -c 'create database travis_ci_test;' -U postgres
+
 language: python
+
+services:
+  - postgresql
+
+addons:
+  mariadb: "10.2"
+  postgresql: "9.4"
+
 python:
  - "2.7"
+
 install: pip install -r requirements.txt
-script: nosetests
+
+script:
+  - nosetest tests/unit/
+  - /tests/integration/run_test.sh
+
