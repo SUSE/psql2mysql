@@ -14,6 +14,9 @@ be easy to add however.
 
 # Usage
 
+## Install Requirements
+```pip install -r requirements.txt```
+
 ## Prerequisites
 * Before using `psql2mysql` for migration, the destination database and all
   its tables need to exist already.
