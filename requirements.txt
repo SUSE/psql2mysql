@@ -1,0 +1,6 @@
+oslo.config
+oslo.log
+psycopg2
+prettytable
+PyMySQL
+SQLAlchemy<1.1.0,>=1.0.10
