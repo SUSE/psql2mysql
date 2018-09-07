@@ -4,11 +4,11 @@ set -ev
 
 # Precheck
 
-./psql2mysql.py --source postgresql://neutron:secret@localhost/neutron precheck
+python psql2mysql.py --source postgresql://neutron:secret@localhost/neutron precheck
 
 # Migrate 
 
-./psql2mysql.py \
+python psql2mysql.py \
     --source postgresql://neutron:secret@localhost/neutron \
     --target mysql+pymysql://neutron:evenmoresecret@localhost/neutron?charset=utf8 \
     migrate
