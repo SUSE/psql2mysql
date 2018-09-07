@@ -1,0 +1,23 @@
+version: '3.1'
+
+services:
+  dbPostgres:
+    image: postgres:9.4
+    restart: always
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: neutron
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: neutron
+  dbMysql:
+    image: mariadb:10.2
+    restart: always
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: evenmoresecret
+      MYSQL_DATABASE: neutron
+      MYSQL_USER: neutron
+      MYSQL_PASSWORD: evenmoresecret
+    

@@ -1,17 +1,17 @@
-before_script:
-  - psql -c 'create database travis_ci_test;' -U postgres
+sudo: required
+
+services:
+  - docker
 
 language: python
 
-services:
-  - postgresql
-
-addons:
-  mariadb: "10.2"
-  postgresql: "9.4"
-
 python:
  - "2.7"
+
+before_install:
+  - docker-compose --version
+  - docker --version
+  - docker-compose -f tests/integration/docker-compose.yml up -d
 
 install: pip install -r requirements.txt
 
