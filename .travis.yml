@@ -1,5 +1,23 @@
+sudo: required
+
+services:
+  - docker
+
 language: python
+
 python:
  - "2.7"
+
+before_install:
+  # Disable services enabled by default
+  # http://docs.travis-ci.com/user/database-setup/#MySQL
+  - sudo /etc/init.d/mysql stop
+  - sudo /etc/init.d/postgresql stop
+  - docker-compose -f tests/integration/docker-compose.yml up -d
+
 install: pip install -r requirements.txt
-script: nosetests
+
+script:
+  - nosetests tests/unit/
+  - tests/integration/run_tests.sh
+
