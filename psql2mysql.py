@@ -19,7 +19,6 @@ import re
 from oslo_config import cfg
 from oslo_log import log as logging
 from prettytable import PrettyTable
-
 from sqlalchemy import create_engine, MetaData, or_, text
 
 
@@ -64,17 +63,24 @@ class DbWrapper(object):
 
     def scanTablefor4ByteUtf8Char(self, table):
         stringColumns = self.getStringColumns(table)
-        LOG.info("Scanning Table %s (columns: %s) for problematic UTF8 "
+        LOG.debug("Scanning Table %s (columns: %s) for problematic UTF8 "
                  "characters", table.name, stringColumns)
         rows = self._query_utf8mb4_rows(table, stringColumns)
-        incompatible_rows = []
+        incompatible = []
+        primary_keys = []
+        if not table.primary_key == None:
+          primary_keys = list(table.primary_key)
         for row in rows:
             for col in stringColumns:
                 if type(row[col]) is not unicode:
                     continue
                 if re.search(ur'[\U00010000-\U0010ffff]', row[col]):
-                    incompatible_rows.append((col, row))
-        return incompatible_rows
+                    incompatible.append({
+                      "column": col,
+                      "value": row[col],
+                      "primary": ["%s=%s" % (k.name, row[k.name]) for k in primary_keys]
+                    })
+        return incompatible
 
     def readTableRows(self, table):
         return self.engine.execute(table.select())
@@ -176,19 +182,27 @@ def do_prechecks(config):
     db.connect()
     tables = db.getSortedTables()
     for table in tables:
-        rows = db.scanTablefor4ByteUtf8Char(table)
-        if rows:
-            print("Table '%s' contains 4 Byte UTF8 characters, which are, "
+        incompatibles = db.scanTablefor4ByteUtf8Char(table)
+        if incompatibles:
+            print("Table '%s' contains 4 Byte UTF8 characters which are "
                   "incompatible with the 'utf8' encoding used by MariaDB" %
                   table.name
             )
-            print("The following rows are affected.")
-            x = PrettyTable()
-            x.field_names = ["Affected Column"] + list(table.columns)
-            for row in rows:
-                x.add_row([row[0]] + list(row[1]))
-            print x
-            raise Exception("UTF8 mb4 found")
+            print("The following rows are affected:")
+
+            output_table = PrettyTable()
+            output_table.field_names = [
+                "Primary Key",
+                "Affected Column",
+                "Value"
+            ]
+
+            for item in incompatibles:
+                output_table.add_row([', '.join(item["primary"]),
+                                      item['column'],
+                                      item['value']])
+            print output_table
+            raise Exception("4 Byte UTF8 characters found in the source database.")
         ## FIXME add check for overly long (>64k) Text columns here
 
 def do_migration(config):

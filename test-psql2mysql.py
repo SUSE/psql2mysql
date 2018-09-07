@@ -35,11 +35,22 @@ class FakeColumn():
     def type(self):
         return self.type
 
+class FakePrimary():
+    def __init__(self, name):
+        self.name = name
+
+    def name(self):
+        return self.name
+
 
 class FakeTable():
-    def __init__(self, name, columns):
+    def __init__(self, name, columns, primary = None):
         self.name = name
         self.columns = columns
+        self.primary_key = primary
+
+    def primary_key(self):
+        return self.primary_key
 
 
 class TestDbWrapper(unittest.TestCase):
@@ -61,7 +72,7 @@ class TestDbWrapper(unittest.TestCase):
     @mock.patch('psql2mysql.DbWrapper._query_utf8mb4_rows')
     def test_scanTablefor4ByteUtf8Char(self, mock_utf8mb_rows,
                                        mock_getStringColumns):
-        table = FakeTable("test", [])
+        table = FakeTable("test", [], [FakePrimary("id")])
         mock_getStringColumns.return_value = ["name"]
         mock_utf8mb_rows.return_value = [
             { "name": u"tei\U0010ffffst", "id": 1},
@@ -70,7 +81,7 @@ class TestDbWrapper(unittest.TestCase):
             { "name": None, "id": 4}
         ]
         result = self.db_wrapper.scanTablefor4ByteUtf8Char(table)
-        column, row = result[0]
+        wrong_item = result[0]
         self.assertEqual(len(result), 1)
-        self.assertEqual("name", column)
-        self.assertEqual(1, row["id"])
+        self.assertEqual("name", wrong_item["column"])
+        self.assertEqual("id=1", wrong_item["primary"][0])
