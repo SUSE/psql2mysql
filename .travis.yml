@@ -17,5 +17,5 @@ install: pip install -r requirements.txt
 
 script:
   - nosetests tests/unit/
-  - tests/integration/run_test.sh
+  - tests/integration/run_tests.sh
 
