@@ -19,7 +19,7 @@ import re
 from oslo_config import cfg
 from oslo_log import log as logging
 from prettytable import PrettyTable
-from sqlalchemy import create_engine, MetaData, or_, text
+from sqlalchemy import create_engine, MetaData, or_, text, types
 
 
 LOG = logging.getLogger(__name__)
@@ -43,6 +43,19 @@ class DbWrapper(object):
         metadata.reflect()
         return metadata.tables
 
+
+    # adapt given query so it excludes deleted items
+    def _exclude_deleted(self, table, query):
+        if not cfg.CONF.exclude_deleted:
+            return query
+        if not "deleted" in table.columns:
+            return query
+        if isinstance(table.columns["deleted"].type, types.INTEGER):
+            return query.where(table.c.deleted == 0)
+        if isinstance(table.columns["deleted"].type, types.VARCHAR):
+            return query.where(table.c.deleted == 'False')
+        return query.where(table.c.deleted == False)
+
     def getStringColumns(self, table):
         columns = table.columns
         textColumns = [
@@ -58,7 +71,7 @@ class DbWrapper(object):
             text("\"%s\" ~ '[\\x10000-\\x10ffff]'" % x) for x in stringColumns
         ]
         q = table.select().where(or_(f for f in filters))
-        result = q.execute()
+        result = _exclude_deleted(table, q).execute()
         return result
 
     def scanTablefor4ByteUtf8Char(self, table):
@@ -83,7 +96,7 @@ class DbWrapper(object):
         return incompatible
 
     def readTableRows(self, table):
-        return self.engine.execute(table.select())
+        return self.engine.execute(self._exclude_deleted(table, table.select()))
 
     # FIXME move this to a MariaDB specific class?
     def disable_constraints(self):
@@ -224,6 +237,9 @@ if __name__ == '__main__':
         cfg.StrOpt('target',
                    required=False,
                    help='connection URL to the target server'),
+        cfg.BoolOpt('exclude-deleted',
+                    default=True,
+                    help='Exclude table columns marked as deleted. True by default.')
     ]
 
     cfg.CONF.register_cli_opts(cli_opts)
