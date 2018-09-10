@@ -171,7 +171,7 @@ class DbDataMigrator(object):
                 # huge transcation?
                 self.target_db.writeTableRows(target_tables[table.name], result)
             else:
-                LOG.info("Table '%s' is empty" % table.name)
+                LOG.debug("Table '%s' is empty" % table.name)
 
 
 def add_subcommands(subparsers):
