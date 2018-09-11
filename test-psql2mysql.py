@@ -17,9 +17,13 @@
 # limitations under the License.
 #
 
-import unittest
-import mock
+try:
+    import mock
+except ImportError:
+    from unittest import mock
+
 import importlib
+import unittest
 
 p2m = importlib.import_module("psql2mysql")
 
