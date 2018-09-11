@@ -16,6 +16,7 @@
 #
 
 import re
+import six
 from oslo_config import cfg
 from oslo_log import log as logging
 from prettytable import PrettyTable
@@ -24,6 +25,10 @@ from sqlalchemy import create_engine, MetaData, or_, text, types
 
 LOG = logging.getLogger(__name__)
 
+
+regex = re.compile(
+    six.u(r'[\U00010000-\U0010ffff]')
+)
 
 class DbWrapper(object):
     def __init__(self, uri=""):
@@ -85,9 +90,9 @@ class DbWrapper(object):
           primary_keys = list(table.primary_key)
         for row in rows:
             for col in stringColumns:
-                if type(row[col]) is not unicode:
+                if not isinstance(row[col], six.string_types):
                     continue
-                if re.search(ur'[\U00010000-\U0010ffff]', row[col]):
+                if regex.search(row[col]):
                     incompatible.append({
                       "column": col,
                       "value": row[col],
@@ -214,7 +219,7 @@ def do_prechecks(config):
                 output_table.add_row([', '.join(item["primary"]),
                                       item['column'],
                                       item['value']])
-            print output_table
+            print(output_table)
             raise Exception("4 Byte UTF8 characters found in the source database.")
         ## FIXME add check for overly long (>64k) Text columns here
 
