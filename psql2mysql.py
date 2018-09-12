@@ -258,13 +258,14 @@ def do_prechecks(config):
                                       item['column'],
                                       item['value']])
             print(output_table)
-            raise Exception("4 Byte UTF8 characters found in the source database.")
+            print("Error during prechecks. "
+                  "4 Byte UTF8 characters found in the source database.")
+
         long_values = db.scanTableForLongTexts(table)
         if long_values:
             print("Table '%s' contains TEXT values that are more than 65536 "
                   "characters long. This is incompatible with MariaDB setup." %
-                  table.name
-            )
+                  table.name)
             print("The following rows are affected:")
 
             output_table = PrettyTable()
@@ -277,7 +278,9 @@ def do_prechecks(config):
                 output_table.add_row([', '.join(item["primary"]),
                                       item['column']])
             print(output_table)
-            raise Exception("Too long text values found in the source database.")
+            print("Error during prechecks. "
+                  "Too long text values found in the source database.")
+
 
 def do_migration(config):
     migrator = DbDataMigrator(config)
