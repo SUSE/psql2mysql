@@ -76,7 +76,7 @@ class DbWrapper(object):
             text("\"%s\" ~ '[\\x10000-\\x10ffff]'" % x) for x in stringColumns
         ]
         q = table.select().where(or_(f for f in filters))
-        result = _exclude_deleted(table, q).execute()
+        result = self._exclude_deleted(table, q).execute()
         return result
 
     def scanTablefor4ByteUtf8Char(self, table):
