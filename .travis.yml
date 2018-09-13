@@ -5,5 +5,7 @@ python:
 matrix:
   allow_failures:
     - python: "3.6"
-install: pip install -r requirements.txt
-script: nosetests
+install: pip install -r requirements.txt -r test-requirements.txt
+script:
+    - flake8 *.py
+    - nosetests

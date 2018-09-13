@@ -39,6 +39,7 @@ class FakeColumn():
     def type(self):
         return self.type
 
+
 class FakePrimary():
     def __init__(self, name):
         self.name = name
@@ -48,7 +49,7 @@ class FakePrimary():
 
 
 class FakeTable():
-    def __init__(self, name, columns, primary = None):
+    def __init__(self, name, columns, primary=None):
         self.name = name
         self.columns = columns
         self.primary_key = primary
@@ -61,14 +62,13 @@ class TestDbWrapper(unittest.TestCase):
     def setUp(self):
         self.db_wrapper = p2m.DbWrapper()
 
-
     def test_getStringColumns(self):
         table = FakeTable("test",
                           [FakeColumn("age", "int"),
                            FakeColumn("name", "VARCHAR"),
                            FakeColumn("noname", " VARCHAR"),
-                           FakeColumn("description", "TEXT")
-                          ])
+                           FakeColumn("description", "TEXT")])
+
         result = self.db_wrapper.getStringColumns(table)
         self.assertEqual(["name", "description"], result)
 
@@ -79,10 +79,10 @@ class TestDbWrapper(unittest.TestCase):
         table = FakeTable("test", [], [FakePrimary("id")])
         mock_getStringColumns.return_value = ["name"]
         mock_utf8mb_rows.return_value = [
-            { "name": u"tei\U0010ffffst", "id": 1},
-            { "name": "name with Ä", "id": 2},
-            { "name": u"ascii name", "id": 3},
-            { "name": None, "id": 4}
+            {"name": u"tei\U0010ffffst", "id": 1},
+            {"name": "name with Ä", "id": 2},
+            {"name": u"ascii name", "id": 3},
+            {"name": None, "id": 4}
         ]
         result = self.db_wrapper.scanTablefor4ByteUtf8Char(table)
         wrong_item = result[0]
