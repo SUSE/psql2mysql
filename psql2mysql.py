@@ -15,11 +15,13 @@
 # limitations under the License.
 #
 
-import re
-import six
 from oslo_config import cfg
 from oslo_log import log as logging
 from prettytable import PrettyTable
+
+import re
+import six
+
 from sqlalchemy import create_engine, MetaData, or_, text, types
 
 LOG = logging.getLogger(__name__)

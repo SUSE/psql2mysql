@@ -28,7 +28,7 @@ import unittest
 p2m = importlib.import_module("psql2mysql")
 
 
-class FakeColumn():
+class FakeColumn(object):
     def __init__(self, name, type):
         self.name = name
         self.type = type
@@ -40,7 +40,7 @@ class FakeColumn():
         return self.type
 
 
-class FakePrimary():
+class FakePrimary(object):
     def __init__(self, name):
         self.name = name
 
@@ -48,7 +48,7 @@ class FakePrimary():
         return self.name
 
 
-class FakeTable():
+class FakeTable(object):
     def __init__(self, name, columns, primary=None):
         self.name = name
         self.columns = columns
