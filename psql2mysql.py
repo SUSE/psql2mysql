@@ -22,8 +22,9 @@ from oslo_log import log as logging
 from prettytable import PrettyTable
 from sqlalchemy import create_engine, MetaData, or_, text, types
 
-
 LOG = logging.getLogger(__name__)
+
+MAX_TEXT_LEN = 65536
 
 regex = re.compile(
     six.u(r'[\U00010000-\U0010ffff]')
@@ -60,6 +61,39 @@ class DbWrapper(object):
             return query.where(table.c.deleted == 'False')
         return query.where(table.c.deleted is False)
 
+    def getTextColumns(self, table):
+        columns = table.columns
+        return [c.name for c in columns if str(c.type) == 'TEXT']
+
+    def scanTableForLongTexts(self, table):
+        textColumns = self.getTextColumns(table)
+        if not textColumns:
+            return []
+        LOG.debug("Scanning Table %s (columns: %s) for too long TEXT values ",
+                  table.name, textColumns)
+        filters = [
+            text("length(\"%s\") > %i" % (x, MAX_TEXT_LEN))
+            for x in textColumns
+        ]
+        q = table.select().where(or_(f for f in filters))
+        rows = q.execute()
+
+        long_values = []
+        primary_keys = []
+        if table.primary_key:
+            primary_keys = list(table.primary_key)
+        for row in rows:
+            for col in textColumns:
+                if not isinstance(row[col], six.string_types):
+                    continue
+                if len(row[col]) > MAX_TEXT_LEN:
+                    long_values.append({
+                      "column": col,
+                      "primary": ["%s=%s" % (k.name, row[k.name])
+                                  for k in primary_keys]
+                    })
+        return long_values
+
     def getStringColumns(self, table):
         columns = table.columns
         textColumns = [
@@ -85,7 +119,7 @@ class DbWrapper(object):
         rows = self._query_utf8mb4_rows(table, stringColumns)
         incompatible = []
         primary_keys = []
-        if table.primary_key is not None:
+        if table.primary_key:
             primary_keys = list(table.primary_key)
         for row in rows:
             for col in stringColumns:
@@ -224,9 +258,28 @@ def do_prechecks(config):
                                       item['column'],
                                       item['value']])
             print(output_table)
-            raise Exception("4 Byte UTF8 characters found in the source "
-                            "database.")
-        # FIXME add check for overly long (>64k) Text columns here
+            print("Error during prechecks. "
+                  "4 Byte UTF8 characters found in the source database.")
+
+        long_values = db.scanTableForLongTexts(table)
+        if long_values:
+            print("Table '%s' contains TEXT values that are more than 65536 "
+                  "characters long. This is incompatible with MariaDB setup." %
+                  table.name)
+            print("The following rows are affected:")
+
+            output_table = PrettyTable()
+            output_table.field_names = [
+                "Primary Key",
+                "Affected Column"
+            ]
+
+            for item in long_values:
+                output_table.add_row([', '.join(item["primary"]),
+                                      item['column']])
+            print(output_table)
+            print("Error during prechecks. "
+                  "Too long text values found in the source database.")
 
 
 def do_migration(config):
