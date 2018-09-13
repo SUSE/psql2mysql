@@ -266,9 +266,9 @@ def do_prechecks(config):
 
         long_values = db.scanTableForLongTexts(table)
         if long_values:
-            print("Table '%s' contains TEXT values that are more than 65536 "
-                  "characters long. This is incompatible with MariaDB setup." %
-                  table.name)
+            print("Table '%s' contains TEXT values that are more than %s "
+                  "characters long. This is incompatible with MariaDB setup.",
+                  table.name, MAX_TEXT_LEN)
             print("The following rows are affected:")
 
             output_table = PrettyTable()
@@ -307,7 +307,7 @@ if __name__ == '__main__':
                    help='connection URL to the target server'),
         cfg.BoolOpt('exclude-deleted',
                     default=True,
-                    help='Exclude table columns marked as deleted. '
+                    help='Exclude table rows marked as deleted. '
                          'True by default.')
     ]
 
