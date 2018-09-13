@@ -68,19 +68,22 @@ class DbWrapper(object):
         columns = table.columns
         return [c.name for c in columns if str(c.type) == 'TEXT']
 
-    def scanTableForLongTexts(self, table):
-        textColumns = self.getTextColumns(table)
-        if not textColumns:
-            return []
-        LOG.debug("Scanning Table %s (columns: %s) for too long TEXT values ",
-                  table.name, textColumns)
+    def _query_long_text_rows(self, table, textColumns):
         filters = [
             text("length(\"%s\") > %i" % (x, MAX_TEXT_LEN))
             for x in textColumns
         ]
         q = table.select().where(or_(f for f in filters))
         rows = q.execute()
+        return rows
 
+    def scanTableForLongTexts(self, table):
+        textColumns = self.getTextColumns(table)
+        if not textColumns:
+            return []
+        LOG.debug("Scanning Table %s (columns: %s) for too long TEXT values ",
+                  table.name, textColumns)
+        rows = self._query_long_text_rows(table, textColumns)
         long_values = []
         primary_keys = []
         if table.primary_key:

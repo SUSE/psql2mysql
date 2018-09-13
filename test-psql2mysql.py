@@ -89,3 +89,21 @@ class TestDbWrapper(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual("name", wrong_item["column"])
         self.assertEqual("id=1", wrong_item["primary"][0])
+
+    @mock.patch('psql2mysql.DbWrapper.getTextColumns')
+    @mock.patch('psql2mysql.DbWrapper._query_long_text_rows')
+    def test_scanTableForLongTexts(self, mock_query_long_text_rows,
+                                   mock_getTextColumns):
+        table = FakeTable("test", [], [FakePrimary("id")])
+        mock_getTextColumns.return_value = ["text"]
+        mock_query_long_text_rows.return_value = [
+            {"text": u"a"*p2m.MAX_TEXT_LEN, "id": 1},
+            {"text": "name with Ä", "id": 2},
+            {"text": u"a"*(p2m.MAX_TEXT_LEN+1), "id": 3},
+            {"text": None, "id": 4}
+        ]
+        result = self.db_wrapper.scanTableForLongTexts(table)
+        self.assertEqual(len(result), 1)
+        wrong_item = result[0]
+        self.assertEqual("text", wrong_item["column"])
+        self.assertEqual("id=3", wrong_item["primary"][0])
