@@ -3,4 +3,5 @@ oslo.log
 psycopg2
 prettytable
 PyMySQL
+rfc3986
 SQLAlchemy<1.1.0,>=1.0.10

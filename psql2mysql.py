@@ -14,12 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+from __future__ import print_function
 
 import re
 import six
+import sys
 from oslo_config import cfg
 from oslo_log import log as logging
 from prettytable import PrettyTable
+from rfc3986 import uri_reference
 from sqlalchemy import create_engine, MetaData, or_, text, types
 
 LOG = logging.getLogger(__name__)
@@ -317,5 +320,17 @@ if __name__ == '__main__':
 #    cfg.CONF.set_override("use_stderr", True)
 
     logging.setup(cfg.CONF, 'pg2my')
-    print(cfg.CONF.command.name)
+
+    # restrict the source databsae to postgresql for now
+    if uri_reference(cfg.CONF.source).scheme != "postgresql":
+        print('Error: Only "postgresql" is supported as the source database '
+              'currently', file=sys.stderr)
+        sys.exit(1)
+
+    if (cfg.CONF.target and
+            uri_reference(cfg.CONF.target).scheme != "mysql+pymysql"):
+        print('Error: Only "mysql" with the "pymysql" driver is supported as '
+              'the target database currently',
+              file=sys.stderr)
+        sys.exit(1)
     cfg.CONF.command.func(cfg)
