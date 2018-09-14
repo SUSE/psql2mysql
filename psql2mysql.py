@@ -330,10 +330,16 @@ if __name__ == '__main__':
               'currently', file=sys.stderr)
         sys.exit(1)
 
-    if (cfg.CONF.target and
-            uri_reference(cfg.CONF.target).scheme != "mysql+pymysql"):
-        print('Error: Only "mysql" with the "pymysql" driver is supported as '
-              'the target database currently',
-              file=sys.stderr)
-        sys.exit(1)
+    if (cfg.CONF.target):
+        uri = uri_reference(cfg.CONF.target)
+        if uri.scheme != "mysql+pymysql":
+            print('Error: Only "mysql" with the "pymysql" driver is supported '
+                  'as the target database currently',
+                  file=sys.stderr)
+            sys.exit(1)
+        if (uri.query is None) or ("charset=utf8" not in uri.query.split('&')):
+            print('Error: The target connection is missing the "charset=utf8" '
+                  'parameter.', file=sys.stderr)
+            sys.exit(1)
+
     cfg.CONF.command.func(cfg)
