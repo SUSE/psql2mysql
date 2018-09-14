@@ -165,6 +165,14 @@ class DbWrapper(object):
         self.connection.execute(table.delete())
 
 
+class SourceDatabaseEmpty(Exception):
+    pass
+
+
+class TargetDatabaseEmpty(Exception):
+    pass
+
+
 class DbDataMigrator(object):
     def __init__(self, config):
         self.cfg = config
@@ -181,10 +189,10 @@ class DbDataMigrator(object):
         target_tables = self.target_db.getTables()
 
         if not source_tables:
-            raise Exception("Source Database doesn't contain any tables")
+            raise SourceDatabaseEmpty()
 
         if not target_tables:
-            raise Exception("Target Database doesn't contain any tables")
+            raise TargetDatabaseEmpty()
 
         # disable constraints on the MariaDB side for the duration of
         # the migration
@@ -291,7 +299,16 @@ def do_prechecks(config):
 def do_migration(config):
     migrator = DbDataMigrator(config)
     migrator.setup()
-    migrator.migrate()
+    try:
+        migrator.migrate()
+    except SourceDatabaseEmpty:
+        print("The source database doesn't contain any Tables. "
+              "Nothing to migrate.")
+    except TargetDatabaseEmpty:
+        print("Error: The target database doesn't contain any Tables. Make "
+              "sure to create the Schema in the target database before "
+              "starting the migration.")
+        sys.exit(1)
 
 
 if __name__ == '__main__':
