@@ -62,7 +62,7 @@ class DbWrapper(object):
             return query.where(table.c.deleted == 0)
         if isinstance(table.columns["deleted"].type, types.VARCHAR):
             return query.where(table.c.deleted == 'False')
-        return query.where(table.c.deleted is False)
+        return query.where(table.c.deleted.is_(False))
 
     def getTextColumns(self, table):
         columns = table.columns
