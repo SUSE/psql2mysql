@@ -19,6 +19,7 @@ from __future__ import print_function
 import re
 import six
 import sys
+import yaml
 from oslo_config import cfg
 from oslo_log import log as logging
 from prettytable import PrettyTable
@@ -174,14 +175,16 @@ class TargetDatabaseEmpty(Exception):
 
 
 class DbDataMigrator(object):
-    def __init__(self, config):
+    def __init__(self, config, source, target):
         self.cfg = config
+        self.src_uri = source if source else cfg.CONF.source
+        self.target_uri = target if target else cfg.CONF.target
 
     def setup(self):
-        self.src_db = DbWrapper(cfg.CONF.source)
+        self.src_db = DbWrapper(self.src_uri)
         self.src_db.connect()
 
-        self.target_db = DbWrapper(cfg.CONF.target)
+        self.target_db = DbWrapper(self.target_uri)
         self.target_db.connect()
 
     def migrate(self):
@@ -248,8 +251,9 @@ def add_subcommands(subparsers):
     parser.set_defaults(func=do_migration)
 
 
-def do_prechecks(config):
-    db = DbWrapper(cfg.CONF.source)
+def do_prechecks(config, source, target):
+    src_uri = source if source else cfg.CONF.source
+    db = DbWrapper(src_uri)
     db.connect()
     tables = db.getSortedTables()
     prechecks_ok = True
@@ -302,8 +306,8 @@ def do_prechecks(config):
         print("Success. No errors found during prechecks.")
 
 
-def do_migration(config):
-    migrator = DbDataMigrator(config)
+def do_migration(config, source, target):
+    migrator = DbDataMigrator(config, source, target)
     migrator.setup()
     try:
         migrator.migrate()
@@ -317,6 +321,29 @@ def do_migration(config):
         sys.exit(1)
 
 
+# restrict the source database to postgresql for now
+def check_source_schema(source):
+    if uri_reference(source).scheme != "postgresql":
+        print('Error: Only "postgresql" is supported as the source database '
+              'currently', file=sys.stderr)
+        sys.exit(1)
+
+
+# restrict the target database to mysql+pymsql
+def check_target_schema(target):
+
+    uri = uri_reference(target)
+    if uri.scheme != "mysql+pymysql":
+        print('Error: Only "mysql" with the "pymysql" driver is supported '
+              'as the target database currently',
+              file=sys.stderr)
+        sys.exit(1)
+    if uri.query is None or "charset=utf8" not in uri.query:
+        print('Error: The target connection is missing the "charset=utf8" '
+              'parameter.', file=sys.stderr)
+        sys.exit(1)
+
+
 if __name__ == '__main__':
     # FIXME: Split these up into separate components?
     #   host, port, username, password, database
@@ -326,11 +353,14 @@ if __name__ == '__main__':
                           help="Available commands",
                           handler=add_subcommands),
         cfg.URIOpt('source',
-                   required=True,
+                   required=False,
                    help='connection URL to the src DB server'),
         cfg.URIOpt('target',
                    required=False,
                    help='connection URL to the target server'),
+        cfg.StrOpt('batch',
+                   required=False,
+                   help='YAML file containing connection URLs'),
         cfg.BoolOpt('exclude-deleted',
                     default=True,
                     help='Exclude table rows marked as deleted. '
@@ -347,22 +377,35 @@ if __name__ == '__main__':
 
     logging.setup(cfg.CONF, 'pg2my')
 
-    # restrict the source databsae to postgresql for now
-    if uri_reference(cfg.CONF.source).scheme != "postgresql":
-        print('Error: Only "postgresql" is supported as the source database '
-              'currently', file=sys.stderr)
-        sys.exit(1)
+    # We expect batch file with this syntax:
+    #
+    # keystone:
+    #   source: postgresql://keystone:p@192.168.243.86/keystone
+    #   target: mysql+pymysql://keystone:p@192.168.243.87/keystone?charset=utf8
+    # cinder:
+    #   source: postgresql://cinder:idRll2gJPodv@192.168.243.86/cinder
+    #   target:
+    if cfg.CONF.batch:
+        try:
+            with open(cfg.CONF.batch, 'r') as f:
+                for db_name, db in yaml.load(f).iteritems():
+                    print('Processing database "%s"... ' % db_name)
+                    check_source_schema(db['source'])
+                    if db['target']:
+                        check_target_schema(db['target'])
+                    cfg.CONF.command.func(cfg, db['source'], db['target'])
 
-    if (cfg.CONF.target):
-        uri = uri_reference(cfg.CONF.target)
-        if uri.scheme != "mysql+pymysql":
-            print('Error: Only "mysql" with the "pymysql" driver is supported '
-                  'as the target database currently',
-                  file=sys.stderr)
-            sys.exit(1)
-        if (uri.query is None) or ("charset=utf8" not in uri.query.split('&')):
-            print('Error: The target connection is missing the "charset=utf8" '
-                  'parameter.', file=sys.stderr)
-            sys.exit(1)
+        except IOError:
+            print('Batch file "%s" does not exist or cannot be read'
+                  % cfg.CONF.batch)
+            sys.exit(2)
+
+        print("Batch processing done.")
+        sys.exit(0)
+
+    check_source_schema(cfg.CONF.source)
+
+    if cfg.CONF.target:
+        check_target_schema(cfg.CONF.target)
 
     cfg.CONF.command.func(cfg)
