@@ -252,6 +252,7 @@ def do_prechecks(config):
     db = DbWrapper(cfg.CONF.source)
     db.connect()
     tables = db.getSortedTables()
+    prechecks_ok = True
     for table in tables:
         incompatibles = db.scanTablefor4ByteUtf8Char(table)
         if incompatibles:
@@ -274,6 +275,7 @@ def do_prechecks(config):
             print(output_table)
             print("Error during prechecks. "
                   "4 Byte UTF8 characters found in the source database.")
+            prechecks_ok = False
 
         long_values = db.scanTableForLongTexts(table)
         if long_values:
@@ -294,6 +296,10 @@ def do_prechecks(config):
             print(output_table)
             print("Error during prechecks. "
                   "Too long text values found in the source database.")
+            prechecks_ok = False
+
+    if prechecks_ok:
+        print("Success. No errors found during prechecks.")
 
 
 def do_migration(config):
