@@ -165,6 +165,14 @@ class DbWrapper(object):
         self.connection.execute(table.delete())
 
 
+class SourceDatabaseEmpty(Exception):
+    pass
+
+
+class TargetDatabaseEmpty(Exception):
+    pass
+
+
 class DbDataMigrator(object):
     def __init__(self, config):
         self.cfg = config
@@ -181,10 +189,10 @@ class DbDataMigrator(object):
         target_tables = self.target_db.getTables()
 
         if not source_tables:
-            raise Exception("Source Database doesn't contain any tables")
+            raise SourceDatabaseEmpty()
 
         if not target_tables:
-            raise Exception("Target Database doesn't contain any tables")
+            raise TargetDatabaseEmpty()
 
         # disable constraints on the MariaDB side for the duration of
         # the migration
@@ -244,6 +252,7 @@ def do_prechecks(config):
     db = DbWrapper(cfg.CONF.source)
     db.connect()
     tables = db.getSortedTables()
+    prechecks_ok = True
     for table in tables:
         incompatibles = db.scanTablefor4ByteUtf8Char(table)
         if incompatibles:
@@ -266,6 +275,7 @@ def do_prechecks(config):
             print(output_table)
             print("Error during prechecks. "
                   "4 Byte UTF8 characters found in the source database.")
+            prechecks_ok = False
 
         long_values = db.scanTableForLongTexts(table)
         if long_values:
@@ -286,12 +296,25 @@ def do_prechecks(config):
             print(output_table)
             print("Error during prechecks. "
                   "Too long text values found in the source database.")
+            prechecks_ok = False
+
+    if prechecks_ok:
+        print("Success. No errors found during prechecks.")
 
 
 def do_migration(config):
     migrator = DbDataMigrator(config)
     migrator.setup()
-    migrator.migrate()
+    try:
+        migrator.migrate()
+    except SourceDatabaseEmpty:
+        print("The source database doesn't contain any Tables. "
+              "Nothing to migrate.")
+    except TargetDatabaseEmpty:
+        print("Error: The target database doesn't contain any Tables. Make "
+              "sure to create the Schema in the target database before "
+              "starting the migration.")
+        sys.exit(1)
 
 
 if __name__ == '__main__':
@@ -330,10 +353,16 @@ if __name__ == '__main__':
               'currently', file=sys.stderr)
         sys.exit(1)
 
-    if (cfg.CONF.target and
-            uri_reference(cfg.CONF.target).scheme != "mysql+pymysql"):
-        print('Error: Only "mysql" with the "pymysql" driver is supported as '
-              'the target database currently',
-              file=sys.stderr)
-        sys.exit(1)
+    if (cfg.CONF.target):
+        uri = uri_reference(cfg.CONF.target)
+        if uri.scheme != "mysql+pymysql":
+            print('Error: Only "mysql" with the "pymysql" driver is supported '
+                  'as the target database currently',
+                  file=sys.stderr)
+            sys.exit(1)
+        if (uri.query is None) or ("charset=utf8" not in uri.query.split('&')):
+            print('Error: The target connection is missing the "charset=utf8" '
+                  'parameter.', file=sys.stderr)
+            sys.exit(1)
+
     cfg.CONF.command.func(cfg)
