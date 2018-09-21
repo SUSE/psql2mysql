@@ -408,4 +408,4 @@ if __name__ == '__main__':
     if cfg.CONF.target:
         check_target_schema(cfg.CONF.target)
 
-    cfg.CONF.command.func(cfg)
+    cfg.CONF.command.func(cfg, cfg.CONF.source, cfg.CONF.target)
