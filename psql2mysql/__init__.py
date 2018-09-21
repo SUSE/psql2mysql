@@ -23,6 +23,7 @@ from oslo_log import log as logging
 from prettytable import PrettyTable
 from rfc3986 import uri_reference
 from sqlalchemy import create_engine, MetaData, or_, text, types
+from datetime2decimal import PreciseTimestamp
 
 LOG = logging.getLogger(__name__)
 
@@ -31,6 +32,20 @@ MAX_TEXT_LEN = 65536
 regex = re.compile(
     six.u(r'[\U00010000-\U0010ffff]')
 )
+
+typeConversions = [
+    {"src": types.DateTime,
+     "dest": types.DECIMAL,
+     "decorator": PreciseTimestamp}
+]
+
+
+def lookupTypeDecorator(srcType, destType):
+    for conv in typeConversions:
+        if isinstance(srcType, conv["src"]) and isinstance(destType,
+                                                           conv["dest"]):
+            return conv["decorator"]
+    return None
 
 
 class DbWrapper(object):
@@ -209,6 +224,7 @@ class DbDataMigrator(object):
 
         for table in source_tables:
             LOG.info("Migrating table: '%s'" % table.name)
+            self.setupTypeDecorators(table, target_tables[table.name])
             if table.name not in target_tables:
                 raise Exception(
                     "Table '%s' does not exist in target database" %
@@ -230,6 +246,33 @@ class DbDataMigrator(object):
                                               result)
             else:
                 LOG.debug("Table '%s' is empty" % table.name)
+
+    def setupTypeDecorators(self, srcTable, targetTable):
+        """
+        Compare the types of all columns in srcTable and targetTable. If
+        they do not match, try to figure out if we have a TypeDecorator
+        configured that could be used for converting the values. If there
+        is one, change the type of the targetTable's columns accordingly.
+
+        FIXME: Currently we ignore case where on TypeDecorator is found
+        optimistically assuming that SQLalchemy will do the right thing,
+        e.g. as for converting from Boolean (PostgreSQL) to TinyInt (MySQL)
+        ideally we should makes this more explicit by adding a proper precheck
+        and defining supported conversion and raising Errors/Warnings if a non
+        supported combination of Types occurs)
+        """
+        srcColumns = srcTable.columns
+
+        for col in srcColumns:
+            targetCol = targetTable.c[col.name]
+            if not isinstance(targetCol.type, col.type.__class__):
+                decorator = lookupTypeDecorator(col.type, targetCol.type)
+                if decorator:
+                    LOG.info("Converting values in column '%s' from type "
+                             "'%s' to type '%s' using TypeDecorator '%s'",
+                             col.name, col.type, targetCol.type,
+                             decorator.__name__)
+                    targetTable.c[targetCol.name].type = decorator
 
 
 def add_subcommands(subparsers):
