@@ -1,5 +1,3 @@
-#!/usr/bin/python2
-#
 # (c) Copyright 2018, SUSE LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -344,7 +342,7 @@ def check_target_schema(target):
         sys.exit(1)
 
 
-if __name__ == '__main__':
+def main():
     # FIXME: Split these up into separate components?
     #   host, port, username, password, database
     cli_opts = [

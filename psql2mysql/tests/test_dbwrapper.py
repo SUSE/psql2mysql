@@ -22,52 +22,27 @@ try:
 except ImportError:
     from unittest import mock
 
-import importlib
+from collections import namedtuple
 import unittest
 
-p2m = importlib.import_module("psql2mysql")
-
-
-class FakeColumn():
-    def __init__(self, name, type):
-        self.name = name
-        self.type = type
-
-    def name(self):
-        return self.name
-
-    def type(self):
-        return self.type
-
-
-class FakePrimary():
-    def __init__(self, name):
-        self.name = name
-
-    def name(self):
-        return self.name
-
-
-class FakeTable():
-    def __init__(self, name, columns, primary=None):
-        self.name = name
-        self.columns = columns
-        self.primary_key = primary
-
-    def primary_key(self):
-        return self.primary_key
+import psql2mysql
 
 
 class TestDbWrapper(unittest.TestCase):
     def setUp(self):
-        self.db_wrapper = p2m.DbWrapper()
+        self.db_wrapper = psql2mysql.DbWrapper()
+
+    FakeColumn = namedtuple('FakeColumn', ['name', 'type'])
+    FakePrimary = namedtuple('FakePrimary', ['name'])
+    FakeTable = namedtuple('FakeTable', ['name', 'columns', 'primary_key'])
 
     def test_getStringColumns(self):
-        table = FakeTable("test",
-                          [FakeColumn("age", "int"),
-                           FakeColumn("name", "VARCHAR"),
-                           FakeColumn("noname", " VARCHAR"),
-                           FakeColumn("description", "TEXT")])
+        table = self.FakeTable("test",
+                               [self.FakeColumn("age", "int"),
+                                self.FakeColumn("name", "VARCHAR"),
+                                self.FakeColumn("noname", " VARCHAR"),
+                                self.FakeColumn("description", "TEXT")],
+                               None)
 
         result = self.db_wrapper.getStringColumns(table)
         self.assertEqual(["name", "description"], result)
@@ -76,7 +51,7 @@ class TestDbWrapper(unittest.TestCase):
     @mock.patch('psql2mysql.DbWrapper._query_utf8mb4_rows')
     def test_scanTablefor4ByteUtf8Char(self, mock_utf8mb_rows,
                                        mock_getStringColumns):
-        table = FakeTable("test", [], [FakePrimary("id")])
+        table = self.FakeTable("test", [], [self.FakePrimary("id")])
         mock_getStringColumns.return_value = ["name"]
         mock_utf8mb_rows.return_value = [
             {"name": u"tei\U0010ffffst", "id": 1},
@@ -94,12 +69,12 @@ class TestDbWrapper(unittest.TestCase):
     @mock.patch('psql2mysql.DbWrapper._query_long_text_rows')
     def test_scanTableForLongTexts(self, mock_query_long_text_rows,
                                    mock_getTextColumns):
-        table = FakeTable("test", [], [FakePrimary("id")])
+        table = self.FakeTable("test", [], [self.FakePrimary("id")])
         mock_getTextColumns.return_value = ["text"]
         mock_query_long_text_rows.return_value = [
-            {"text": u"a"*p2m.MAX_TEXT_LEN, "id": 1},
+            {"text": u"a"*psql2mysql.MAX_TEXT_LEN, "id": 1},
             {"text": "name with Ä", "id": 2},
-            {"text": u"a"*(p2m.MAX_TEXT_LEN+1), "id": 3},
+            {"text": u"a"*(psql2mysql.MAX_TEXT_LEN+1), "id": 3},
             {"text": None, "id": 4}
         ]
         result = self.db_wrapper.scanTableForLongTexts(table)
