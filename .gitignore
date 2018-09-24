@@ -1,0 +1,3 @@
+**/*.pyc
+.eggs
+psql2mysql.egg-info
