@@ -45,18 +45,27 @@ be easy to add however.
     Runs the acutal migration. Will go through, the database table by table
     and migrate all rows to the target database.
 
-It is possible batch to process more databases in one run of `psql2mysql` using the `batch`
-option. The argument for such option is a path to YML file that can describe more
-databases with their source and target connection strings. The format of YML file is:
+### Options
 
-```
-database1:
-  source: source URI for database1
-  target: target URI for database1
-database2:
-  ...
+* `exclude-deleted`
 
-```
+    When migrating the data from source to target database, exclude soft-deleted
+    rows. Set to true by default.
+
+* `batch`
+
+    Process more databases in one run of `psql2mysql`. The argument for thish option
+    is a path to YML file that lists set of databases with their source and target
+    connection strings. The format of YML file is:
+
+    ```
+    database1:
+      source: source URI for database1
+      target: target URI for database1
+    database2:
+      source: source URI for database2
+      ...
+    ```
 
 ## Examples
 
