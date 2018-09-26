@@ -72,22 +72,22 @@ be easy to add however.
 To check that it is actually possible to migrate run the `precheck`
 subcommand:
 
-```psql2mysql.py --source postgresql://neutron:secret@192.168.1.1/neutron precheck```
+```psql2mysql --source postgresql://neutron:secret@192.168.1.1/neutron precheck```
 
 To check all databases in the batch file:
 
-```psql2mysql.py --batch databases.yml precheck```
+```psql2mysql --batch databases.yml precheck```
 
 
 To do the actual migraton:
 ```
-    psql2mysql.py \
+    psql2mysql \
         --source postgresql://neutron:secret@192.168.1.1/neutron \
         --target mysql+pymysql://neutron:evenmoresecret@192.168.1.2/neutron?charset=utf8 \
         migrate
 ```
 
 # Testing
-`psql2mysql.py` provides a couple of unit tests. To run the tests use:
+`psql2mysql` provides a test suite. To run the tests use:
 
-```nosetests test-psql2mysql.py```
+```nosetests```
