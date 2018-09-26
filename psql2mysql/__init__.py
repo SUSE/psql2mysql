@@ -187,7 +187,16 @@ class DbWrapper(object):
             )
 
     def clearTable(self, table):
-        self.connection.execute(table.delete())
+        LOG.debug("Purging table: %s", table.name)
+        if self.chunk_size > 0:
+            # DELETE ... LIMIT is MySQL specific and there is no way to
+            # express it in SQLalchemy other than using a raw query.
+            query = "DELETE FROM `%s` LIMIT %d" % (table.name, self.chunk_size)
+            res = self.connection.execute(query)
+            while res.rowcount:
+                res = self.connection.execute(query)
+        else:
+            self.connection.execute(table.delete())
 
 
 class SourceDatabaseEmpty(Exception):
