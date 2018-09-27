@@ -207,6 +207,10 @@ class TargetDatabaseEmpty(Exception):
     pass
 
 
+class Psql2MysqlRuntimeError(RuntimeError):
+    pass
+
+
 class DbDataMigrator(object):
     def __init__(self, config, source, target, chunk_size=None):
         self.cfg = config
@@ -247,7 +251,7 @@ class DbDataMigrator(object):
             LOG.info("Migrating table: '%s'" % table.name)
             self.setupTypeDecorators(table, target_tables[table.name])
             if table.name not in target_tables:
-                raise Exception(
+                raise Psql2MysqlRuntimeError(
                     "Table '%s' does not exist in target database" %
                     table.name)
 
@@ -340,8 +344,7 @@ def do_prechecks(config, source, target):
                                       item['column'],
                                       item['value']])
             print(output_table)
-            print("Error during prechecks. "
-                  "4 Byte UTF8 characters found in the source database.")
+            print("4 Byte UTF8 characters found in the source database.")
             prechecks_ok = False
 
         long_values = db.scanTableForLongTexts(table)
@@ -361,12 +364,16 @@ def do_prechecks(config, source, target):
                 output_table.add_row([', '.join(item["primary"]),
                                       item['column']])
             print(output_table)
-            print("Error during prechecks. "
-                  "Too long text values found in the source database.")
+            print("Too long text values found in the source database.")
             prechecks_ok = False
 
     if prechecks_ok:
         print("Success. No errors found during prechecks.")
+    else:
+        raise Psql2MysqlRuntimeError(
+            "Errors were found during prechecks. Please address the reported "
+            "issues manually and try again."
+        )
 
 
 def do_migration(config, source, target):
@@ -463,6 +470,9 @@ def main():
                         check_target_schema(db['target'])
                     cfg.CONF.command.func(cfg, db['source'], db['target'])
 
+        except Psql2MysqlRuntimeError as e:
+            print(e, file=sys.stderr)
+            sys.exit(1)
         except IOError:
             print('Batch file "%s" does not exist or cannot be read'
                   % cfg.CONF.batch)
@@ -476,4 +486,8 @@ def main():
     if cfg.CONF.target:
         check_target_schema(cfg.CONF.target)
 
-    cfg.CONF.command.func(cfg, cfg.CONF.source, cfg.CONF.target)
+    try:
+        cfg.CONF.command.func(cfg, cfg.CONF.source, cfg.CONF.target)
+    except Psql2MysqlRuntimeError as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)
