@@ -82,3 +82,21 @@ class TestDbWrapper(unittest.TestCase):
         wrong_item = result[0]
         self.assertEqual("text", wrong_item["column"])
         self.assertEqual("id=3", wrong_item["primary"][0])
+
+
+class TestChuckedDbWrapper(TestDbWrapper):
+    def setUp(self):
+        self.uri = "postgresql://keystone:p@192.168.243.86/keystone"
+        self.path = ""
+        self.limit = 10
+        self.db_wrapper = psql2mysql.ChunkedDBWrapper(self.uri, self.path,
+                                                      self.limit)
+
+    def test_find_status(self):
+        pass
+
+    def test_close(self):
+        pass
+
+    def test_readTableRows(self):
+        pass

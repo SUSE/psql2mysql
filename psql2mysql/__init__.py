@@ -14,14 +14,18 @@
 #
 from __future__ import print_function
 
+import json
+import os
 import re
 import six
 import sys
 import yaml
+from datetime import datetime
 from oslo_config import cfg
 from oslo_log import log as logging
 from prettytable import PrettyTable
 from rfc3986 import uri_reference
+from six.moves.urllib.parse import urlparse
 from sqlalchemy import create_engine, MetaData, or_, text, types
 
 LOG = logging.getLogger(__name__)
@@ -140,8 +144,17 @@ class DbWrapper(object):
         return incompatible
 
     def readTableRows(self, table):
-        return self.engine.execute(self._exclude_deleted(table,
+        """
+
+        :param table: Database table object to read from.
+        :return: A result tuple in the form of:
+                (resturns_rows, rowcount, chunked, row iterator)
+        """
+        chunked = False
+        rows = self.engine.execute(self._exclude_deleted(table,
                                                          table.select()))
+
+        return rows.returns_rows, rows.rowcount, chunked, iter(rows)
 
     # FIXME move this to a MariaDB specific class?
     def disable_constraints(self):
@@ -157,11 +170,101 @@ class DbWrapper(object):
         # huge transcation?
         self.connection.execute(
             table.insert(),
-            rows.fetchall()
+            *rows
         )
 
     def clearTable(self, table):
         self.connection.execute(table.delete())
+
+    def close(self):
+        pass
+
+
+class ChunkedDBWrapper(DbWrapper):
+
+    def __init__(self, uri="", path='/tmp/psql2mysql/', limit=10000):
+        super(ChunkedDBWrapper, self).__init__(uri)
+
+        self.limit = limit
+        res = urlparse(uri)
+        self.status_file = "{}-{}.json".format(res.hostname, res.path[1:])
+        self.status_path = os.path.join(path, self.status_file)
+
+        if not os.path.exists(path):
+            os.makedirs(path)
+        try:
+            self.status = json.load(open(self.status_path)) or {}
+        except IOError:
+            self.status = {}
+
+    def _find_status(self, table):
+        primary_key = list(table.primary_key) if table.primary_key else []
+
+        if not primary_key or len(primary_key) > 1:
+            return None
+
+        primary_key = primary_key.pop()
+        status = {}
+
+        if isinstance(table.columns[primary_key.name].type, types.VARCHAR):
+            # using uuid, we we will filter by created_at if it exists or
+            # fall back to full table migration
+            # NOTE: sqlalchemy's Columns cant be boolean compared, so need to
+            # use 'is not None' here.
+            if table.columns.get('created_at') is not None:
+                status['col'] = 'created_at'
+            else:
+                return None
+        elif isinstance(table.columns[primary_key.name].type, types.INTEGER):
+            # Assuming auto-increment id.
+            status['col'] = primary_key.name
+        else:
+            return None
+        return status
+
+    def readTableRows(self, table):
+        chunked = True
+        # sqlalchemy table and columns can not do boolean checks, so:
+        #    self.status.get(table, self._find_status(table))
+        # isn't possible here
+        status = self.status.get(table.name)
+        if status is None:
+            status = self._find_status(table)
+
+        if not status:
+            chunked = False
+            select = table.select()
+        else:
+            if 'mark' in status:
+                select = table.select().where(
+                    table.columns[status['col']] > status['mark']).\
+                    order_by(table.columns[status['col']]).limit(self.limit)
+            else:
+                select = table.select().\
+                    order_by(table.columns[status['col']]).limit(self.limit)
+
+        self.status[table.name] = status
+        rows = self.engine.execute(self._exclude_deleted(table, select))
+
+        def row_iter():
+            for row in rows.fetchall():
+                if status:
+                    if isinstance(row[status['col']], datetime):
+                        self.status[table.name]['mark'] = \
+                            row[status['col']].isoformat()
+                    else:
+                        self.status[table.name]['mark'] = row[status['col']]
+                yield row
+
+        return rows.returns_rows, rows.rowcount, chunked, row_iter()
+
+    def close(self):
+        try:
+            with open(self.status_path, 'w') as writer:
+                json.dump(self.status, writer)
+        except IOError as err:
+            # TODO: do something here.
+            raise StatusSaveError(err.message, self.status_path)
 
 
 class SourceDatabaseEmpty(Exception):
@@ -172,6 +275,12 @@ class TargetDatabaseEmpty(Exception):
     pass
 
 
+class StatusSaveError(Exception):
+    def __init__(self, message, status_path):
+        self.message = message
+        self.status_path = status_path
+
+
 class DbDataMigrator(object):
     def __init__(self, config, source, target):
         self.cfg = config
@@ -179,7 +288,12 @@ class DbDataMigrator(object):
         self.target_uri = target if target else cfg.CONF.target
 
     def setup(self):
-        self.src_db = DbWrapper(self.src_uri)
+        if cfg.CONF.command.chunked:
+            self.src_db = ChunkedDBWrapper(self.src_uri,
+                                           cfg.CONF.command.status_dir,
+                                           cfg.CONF.command.chunk_size)
+        else:
+            self.src_db = DbWrapper(self.src_uri)
         self.src_db.connect()
 
         self.target_db = DbWrapper(self.target_uri)
@@ -207,29 +321,51 @@ class DbDataMigrator(object):
                 continue
             self.target_db.clearTable(table)
 
-        for table in source_tables:
-            LOG.info("Migrating table: '%s'" % table.name)
-            if table.name not in target_tables:
-                raise Exception(
-                    "Table '%s' does not exist in target database" %
-                    table.name)
+        try:
+            for table in source_tables:
+                LOG.info("Migrating table: '%s'" % table.name)
 
-            # skip the schema migration related tables
-            # FIXME: Should we put this into a config setting
-            # (e.g. --skiptables?)
-            if (table.name == "migrate_version" or
-                    table.name.startswith("alembic_")):
-                continue
+                # skip the schema migration related tables
+                # FIXME: Should we put this into a config setting
+                # (e.g. --skiptables?)
+                if (table.name == "migrate_version" or
+                        table.name.startswith("alembic_")):
+                    continue
 
-            result = self.src_db.readTableRows(table)
-            if result.returns_rows and result.rowcount > 0:
-                LOG.info("Rowcount %s" % result.rowcount)
-                # FIXME: Allow to process this in batches instead one possibly
-                # huge transcation?
-                self.target_db.writeTableRows(target_tables[table.name],
-                                              result)
-            else:
-                LOG.debug("Table '%s' is empty" % table.name)
+                if table.name not in target_tables:
+                    raise Exception(
+                        "Table '%s' does not exist in target database" %
+                        table.name)
+
+                returns_rows, rowcount, chunked, rows = \
+                    self.src_db.readTableRows(table)
+                if not returns_rows or rowcount == 0:
+                    LOG.debug("Table '%s' is empty" % table.name)
+
+                while returns_rows and rowcount > 0:
+                    if chunked:
+                        LOG.info("Using chunked table migration")
+                        LOG.info("Migrating chuck with rowcount %s" % rowcount)
+                    else:
+                        LOG.info("Using full table migration")
+                        LOG.info("Rowcount %s" % rowcount)
+                    # FIXME: Allow to process this in batches instead one
+                    # possibly huge transcation?
+                    self.target_db.writeTableRows(target_tables[table.name],
+                                                  rows)
+                    if not chunked:
+                        break
+                    returns_rows, rowcount, chunked, rows = \
+                        self.src_db.readTableRows(table)
+        finally:
+            # always attempt to close, as if we're doing a chunked migration
+            # we want the status files written.
+            try:
+                self.src_db.close()
+                self.target_db.close()
+            except StatusSaveError as err:
+                LOG.warning("Failed to save current migration status to %s"
+                            % err.status_path)
 
 
 def add_subcommands(subparsers):
@@ -246,6 +382,18 @@ def add_subcommands(subparsers):
     parser = subparsers.add_parser(
         'migrate',
         help='Migrate data from PostgreSQL to MariaDB')
+    parser.add_argument("--chunked",
+                        action='store_true',
+                        default=False,
+                        help='split table migrations into chucks of records '
+                             'at a time.')
+    parser.add_argument("--chunk-size",
+                        default=10000,
+                        help='Number of records to move per chunk.')
+    parser.add_argument("--status-dir",
+                        default='/tmp/psql2mysql/',
+                        help='Directory location to store source database '
+                             'migration state.')
     parser.set_defaults(func=do_migration)
 
 
@@ -386,7 +534,7 @@ def main():
     if cfg.CONF.batch:
         try:
             with open(cfg.CONF.batch, 'r') as f:
-                for db_name, db in yaml.load(f).iteritems():
+                for db_name, db in yaml.load(f).items():
                     print('Processing database "%s"... ' % db_name)
                     check_source_schema(db['source'])
                     if db['target']:
