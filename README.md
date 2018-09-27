@@ -87,6 +87,11 @@ To do the actual migraton:
         migrate
 ```
 
+To migrate all databases in the batch file:
+
+```psql2mysql --batch databases.yml migrate```
+
+
 # Testing
 `psql2mysql` provides a test suite. To run the tests use:
 
