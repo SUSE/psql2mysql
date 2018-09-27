@@ -23,6 +23,9 @@ except ImportError:
     from unittest import mock
 
 from collections import namedtuple
+from tempfile import mkdtemp
+from shutil import rmtree
+from sqlalchemy import INTEGER, VARCHAR, DATETIME
 import unittest
 
 import psql2mysql
@@ -84,19 +87,74 @@ class TestDbWrapper(unittest.TestCase):
         self.assertEqual("id=3", wrong_item["primary"][0])
 
 
-class TestChuckedDbWrapper(TestDbWrapper):
+class TestChunkedDbWrapper(TestDbWrapper):
     def setUp(self):
         self.uri = "postgresql://keystone:p@192.168.243.86/keystone"
-        self.path = ""
+        self.path = mkdtemp()
         self.limit = 10
         self.db_wrapper = psql2mysql.ChunkedDBWrapper(self.uri, self.path,
                                                       self.limit)
 
+    def tearDown(self):
+        rmtree(self.path)
+
     def test_find_status(self):
-        pass
+        # good tables
+        int_table = self.FakeTable(
+            'int',
+            {
+                'id': self.FakeColumn('id', INTEGER()),
+                'col1': self.FakeColumn('col1', VARCHAR()),
+                'col2': self.FakeColumn('col2', VARCHAR())},
+            [self.FakePrimary('id')])
+
+        str_table = self.FakeTable(
+            'uuid_created_at',
+            {
+                'id': self.FakeColumn('id', VARCHAR()),
+                'created_at': self.FakeColumn('created_at', DATETIME()),
+                'col2': self.FakeColumn('col2', VARCHAR())},
+            [self.FakePrimary('id')])
+
+        for table, expected_col in ((int_table, 'id'),
+                                    (str_table, 'created_at')):
+            expected = dict(col=expected_col)
+            self.assertDictEqual(self.db_wrapper._find_status(table), expected)
+
+        # Bad tables
+        str_table_bad = self.FakeTable(
+            'uuid_no_created_at',
+            {
+                'id': self.FakeColumn('id', VARCHAR()),
+                'col1': self.FakeColumn('col1', VARCHAR()),
+                'col2': self.FakeColumn('col2', VARCHAR())},
+            [self.FakePrimary('id')])
+
+        composite_key_table = self.FakeTable(
+            'composite_key',
+            {
+                'id': self.FakeColumn('id', VARCHAR()),
+                'col1': self.FakeColumn('col1', VARCHAR()),
+                'col2': self.FakeColumn('col2', VARCHAR())},
+            [self.FakePrimary('id'), self.FakePrimary('col1')])
+
+        no_primary = self.FakeTable(
+            'no_primary',
+            {
+                'id': self.FakeColumn('id', VARCHAR()),
+                'col1': self.FakeColumn('col1', VARCHAR()),
+                'col2': self.FakeColumn('col2', VARCHAR())},
+            None)
+
+        for table in str_table_bad, composite_key_table, no_primary:
+            self.assertIsNone(self.db_wrapper._find_status(table))
 
     def test_close(self):
-        pass
+        with mock.patch('json.dump', side_effect=IOError('err')):
+            self.assertRaises(psql2mysql.StatusSaveError,
+                              self.db_wrapper.close)
+
+        # TODO test writing out self.status
 
     def test_readTableRows(self):
         pass
