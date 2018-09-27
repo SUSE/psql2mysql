@@ -49,8 +49,10 @@ def lookupTypeDecorator(srcType, destType):
 
 
 class DbWrapper(object):
-    def __init__(self, uri=""):
+    def __init__(self, uri="", chunked=False, chunk_size=None):
         self.uri = uri
+        self.chunked = chunked
+        self.chunk_size = chunk_size
 
     def connect(self):
         self.engine = create_engine(self.uri)
@@ -158,6 +160,7 @@ class DbWrapper(object):
         return self.engine.execute(self._exclude_deleted(table,
                                                          table.select()))
 
+
     # FIXME move this to a MariaDB specific class?
     def disable_constraints(self):
         self.connection.execute(
@@ -168,12 +171,16 @@ class DbWrapper(object):
         )
 
     def writeTableRows(self, table, rows):
-        # FIXME: Allow to process this in batches instead one possibly
-        # huge transcation?
-        self.connection.execute(
-            table.insert(),
-            rows.fetchall()
-        )
+        if self.chunked:
+            chunk = rows.fetchmany(self.chunk_size)
+            while chunk:
+                self.connection.execute(table.insert(), chunk)
+                chunk = rows.fetchmany(self.chunk_size)
+        else:
+            self.connection.execute(
+                table.insert(),
+                rows.fetchall()
+            )
 
     def clearTable(self, table):
         self.connection.execute(table.delete())
@@ -194,10 +201,14 @@ class DbDataMigrator(object):
         self.target_uri = target if target else cfg.CONF.target
 
     def setup(self):
-        self.src_db = DbWrapper(self.src_uri)
+        self.chunked = cfg.CONF.command.chunked
+        self.chunk_size = cfg.CONF.command.chunk_size
+
+        self.src_db = DbWrapper(self.src_uri, self.chunked, self.chunk_size)
         self.src_db.connect()
 
-        self.target_db = DbWrapper(self.target_uri)
+        self.target_db = DbWrapper(self.target_uri, self.chunked,
+                                   self.chunk_size)
         self.target_db.connect()
 
     def migrate(self):
@@ -289,6 +300,15 @@ def add_subcommands(subparsers):
     parser = subparsers.add_parser(
         'migrate',
         help='Migrate data from PostgreSQL to MariaDB')
+
+    parser.add_argument("--chunked",
+                        action='store_true',
+                        default=False,
+                        help='split table migrations into chucks of records '
+                             'at a time.')
+    parser.add_argument("--chunk-size", "-s",
+                        default=10000,
+                        help='Number of records to move per chunk.')
     parser.set_defaults(func=do_migration)
 
 
