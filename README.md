@@ -38,6 +38,7 @@ python setup.py install
   needs privileges to temporary disable constraints and foreign keys for the
   duration of the migration.
 
+## Commands
 `psql2mysql` currenty provides two subcommands:
 
 * `precheck`
@@ -61,7 +62,7 @@ python setup.py install
 
 * `batch`
 
-    Process more databases in one run of `psql2mysql`. The argument for thish option
+    Process more databases in one run of `psql2mysql`. The argument for this option
     is a path to YML file that lists set of databases with their source and target
     connection strings. The format of YML file is:
 
@@ -73,6 +74,17 @@ python setup.py install
       source: source URI for database2
       ...
     ```
+
+* `chunk-size`
+
+    By default table migrations are broken into chunks, a number of rows at a
+    time. The default size is `10000`. This option with change the chunk size.
+
+    Breaking the migration into chunks improves RAM usage and allows the
+    migration tool to work with larger databases.
+
+    Setting `chunk-size` to `0` will disable chunking and the migration will
+    migrate the whole table in one go. Be warned that this will use more RAM.
 
 ## Examples
 
