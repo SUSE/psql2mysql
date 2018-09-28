@@ -17,12 +17,14 @@ from __future__ import print_function
 import re
 import six
 import sys
+import warnings
 import yaml
 from oslo_config import cfg
 from oslo_log import log as logging
 from prettytable import PrettyTable
 from rfc3986 import uri_reference
 from sqlalchemy import create_engine, MetaData, or_, text, types
+from sqlalchemy import exc as sa_exc
 from datetime2decimal import PreciseTimestamp
 
 LOG = logging.getLogger(__name__)
@@ -58,12 +60,16 @@ class DbWrapper(object):
 
     def getSortedTables(self):
         metadata = MetaData(bind=self.engine)
-        metadata.reflect()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=sa_exc.SAWarning)
+            metadata.reflect()
         return metadata.sorted_tables
 
     def getTables(self):
         metadata = MetaData(bind=self.engine)
-        metadata.reflect()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=sa_exc.SAWarning)
+            metadata.reflect()
         return metadata.tables
 
     # adapt given query so it excludes deleted items
