@@ -25,6 +25,8 @@ from rfc3986 import uri_reference
 from sqlalchemy import create_engine, MetaData, or_, text, types
 from datetime2decimal import PreciseTimestamp
 
+from memory_profiler import profile
+
 LOG = logging.getLogger(__name__)
 
 MAX_TEXT_LEN = 65536
@@ -156,6 +158,7 @@ class DbWrapper(object):
                     })
         return incompatible
 
+    @profile
     def readTableRows(self, table):
         return self.engine.execute(self._exclude_deleted(table,
                                                          table.select()))
@@ -170,8 +173,9 @@ class DbWrapper(object):
             "SET SESSION foreign_key_checks='OFF'"
         )
 
+    @profile
     def writeTableRows(self, table, rows):
-        if self.chunked:
+        if self.chunked and self.chunk_size > 0:
             chunk = rows.fetchmany(self.chunk_size)
             while chunk:
                 self.connection.execute(table.insert(), chunk)
@@ -202,7 +206,11 @@ class DbDataMigrator(object):
 
     def setup(self):
         self.chunked = cfg.CONF.command.chunked
-        self.chunk_size = cfg.CONF.command.chunk_size
+        try:
+            self.chunk_size = positive_int(cfg.CONF.command.chunk_size)
+        except ValueError as e:
+            LOG.error(e.message)
+            raise
 
         self.src_db = DbWrapper(self.src_uri, self.chunked, self.chunk_size)
         self.src_db.connect()
@@ -211,6 +219,7 @@ class DbDataMigrator(object):
                                    self.chunk_size)
         self.target_db.connect()
 
+    @profile
     def migrate(self):
         source_tables = self.src_db.getSortedTables()
         target_tables = self.target_db.getTables()
@@ -234,19 +243,19 @@ class DbDataMigrator(object):
             self.target_db.clearTable(table)
 
         for table in source_tables:
-            LOG.info("Migrating table: '%s'" % table.name)
-            self.setupTypeDecorators(table, target_tables[table.name])
-            if table.name not in target_tables:
-                raise Exception(
-                    "Table '%s' does not exist in target database" %
-                    table.name)
-
             # skip the schema migration related tables
             # FIXME: Should we put this into a config setting
             # (e.g. --skiptables?)
             if (table.name == "migrate_version" or
                     table.name.startswith("alembic_")):
                 continue
+
+            LOG.info("Migrating table: '%s'" % table.name)
+            self.setupTypeDecorators(table, target_tables[table.name])
+            if table.name not in target_tables:
+                raise Exception(
+                    "Table '%s' does not exist in target database" %
+                    table.name)
 
             result = self.src_db.readTableRows(table)
             if result.returns_rows and result.rowcount > 0:
@@ -284,6 +293,19 @@ class DbDataMigrator(object):
                              col.name, col.type, targetCol.type,
                              decorator.__name__)
                     targetTable.c[targetCol.name].type = decorator
+
+
+def positive_int(value):
+    try:
+        if not isinstance(value, int):
+            value = int(value)
+
+        if value < 0:
+            raise ValueError()
+
+        return value
+    except ValueError:
+        raise ValueError("{} must be a positive integer".format(value))
 
 
 def add_subcommands(subparsers):
