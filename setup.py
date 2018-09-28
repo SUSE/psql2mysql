@@ -27,7 +27,7 @@ setup(
         'rfc3986',
         'SQLAlchemy<1.1.0,>=1.0.10',
     ],
-    tests_requires=[
+    tests_require=[
         'flake8',
         'mock',
     ],
