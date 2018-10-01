@@ -249,11 +249,12 @@ class DbDataMigrator(object):
 
         for table in source_tables:
             LOG.info("Migrating table: '%s'" % table.name)
-            self.setupTypeDecorators(table, target_tables[table.name])
             if table.name not in target_tables:
                 raise Psql2MysqlRuntimeError(
                     "Table '%s' does not exist in target database" %
                     table.name)
+
+            self.setupTypeDecorators(table, target_tables[table.name])
 
             # skip the schema migration related tables
             # FIXME: Should we put this into a config setting

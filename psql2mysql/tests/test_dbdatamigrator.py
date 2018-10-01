@@ -100,3 +100,20 @@ class TestDbDataMigrator(unittest.TestCase):
         dbdatamigrator.src_db.readTableRows.assert_called_with(foo)
         dbdatamigrator.target_db.clearTable.assert_called_with(foo)
         dbdatamigrator.target_db.writeTableRows.assert_called_once()
+
+    def test_migrate_target_missing(self):
+        chunk_size = 10
+        dbdatamigrator = psql2mysql.DbDataMigrator(None, 'source', 'target',
+                                                   chunk_size)
+        table = namedtuple('Table', ['name', 'columns'])
+        foo = table('foo', [])
+        bar = table('bar', [])
+        dbdatamigrator.src_db = mock.MagicMock()
+        dbdatamigrator.src_db.getSortedTables.return_value = [bar, foo]
+        dbdatamigrator.target_db = mock.MagicMock()
+        dbdatamigrator.target_db.getTables.return_value = {'foo': foo}
+        dbdatamigrator.target_db.getSortedTables.return_value = [foo]
+        with self.assertRaisesRegexp(
+                psql2mysql.Psql2MysqlRuntimeError,
+                "^Table 'bar' does not exist in target database$"):
+            dbdatamigrator.migrate()
