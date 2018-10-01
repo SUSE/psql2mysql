@@ -27,6 +27,8 @@ from sqlalchemy import create_engine, MetaData, or_, text, types
 from sqlalchemy import exc as sa_exc
 from datetime2decimal import PreciseTimestamp
 
+from memory_profiler import profile
+
 LOG = logging.getLogger(__name__)
 
 MAX_TEXT_LEN = 65536
@@ -51,8 +53,10 @@ def lookupTypeDecorator(srcType, destType):
 
 
 class DbWrapper(object):
-    def __init__(self, uri=""):
+    def __init__(self, uri="", chunked=False, chunk_size=None):
         self.uri = uri
+        self.chunked = chunked
+        self.chunk_size = chunk_size
 
     def connect(self):
         self.engine = create_engine(self.uri)
@@ -160,9 +164,11 @@ class DbWrapper(object):
                     })
         return incompatible
 
+    @profile
     def readTableRows(self, table):
         return self.engine.execute(self._exclude_deleted(table,
                                                          table.select()))
+
 
     # FIXME move this to a MariaDB specific class?
     def disable_constraints(self):
@@ -173,13 +179,18 @@ class DbWrapper(object):
             "SET SESSION foreign_key_checks='OFF'"
         )
 
+    @profile
     def writeTableRows(self, table, rows):
-        # FIXME: Allow to process this in batches instead one possibly
-        # huge transcation?
-        self.connection.execute(
-            table.insert(),
-            rows.fetchall()
-        )
+        if self.chunked and self.chunk_size > 0:
+            chunk = rows.fetchmany(self.chunk_size)
+            while chunk:
+                self.connection.execute(table.insert(), chunk)
+                chunk = rows.fetchmany(self.chunk_size)
+        else:
+            self.connection.execute(
+                table.insert(),
+                rows.fetchall()
+            )
 
     def clearTable(self, table):
         self.connection.execute(table.delete())
@@ -200,12 +211,21 @@ class DbDataMigrator(object):
         self.target_uri = target if target else cfg.CONF.target
 
     def setup(self):
-        self.src_db = DbWrapper(self.src_uri)
+        self.chunked = cfg.CONF.command.chunked
+        try:
+            self.chunk_size = positive_int(cfg.CONF.command.chunk_size)
+        except ValueError as e:
+            LOG.error(e.message)
+            raise
+
+        self.src_db = DbWrapper(self.src_uri, self.chunked, self.chunk_size)
         self.src_db.connect()
 
-        self.target_db = DbWrapper(self.target_uri)
+        self.target_db = DbWrapper(self.target_uri, self.chunked,
+                                   self.chunk_size)
         self.target_db.connect()
 
+    @profile
     def migrate(self):
         source_tables = self.src_db.getSortedTables()
         target_tables = self.target_db.getTables()
@@ -229,19 +249,19 @@ class DbDataMigrator(object):
             self.target_db.clearTable(table)
 
         for table in source_tables:
-            LOG.info("Migrating table: '%s'" % table.name)
-            self.setupTypeDecorators(table, target_tables[table.name])
-            if table.name not in target_tables:
-                raise Exception(
-                    "Table '%s' does not exist in target database" %
-                    table.name)
-
             # skip the schema migration related tables
             # FIXME: Should we put this into a config setting
             # (e.g. --skiptables?)
             if (table.name == "migrate_version" or
                     table.name.startswith("alembic_")):
                 continue
+
+            LOG.info("Migrating table: '%s'" % table.name)
+            self.setupTypeDecorators(table, target_tables[table.name])
+            if table.name not in target_tables:
+                raise Exception(
+                    "Table '%s' does not exist in target database" %
+                    table.name)
 
             result = self.src_db.readTableRows(table)
             if result.returns_rows and result.rowcount > 0:
@@ -281,6 +301,19 @@ class DbDataMigrator(object):
                     targetTable.c[targetCol.name].type = decorator
 
 
+def positive_int(value):
+    try:
+        if not isinstance(value, int):
+            value = int(value)
+
+        if value < 0:
+            raise ValueError()
+
+        return value
+    except ValueError:
+        raise ValueError("{} must be a positive integer".format(value))
+
+
 def add_subcommands(subparsers):
     parser = subparsers.add_parser('precheck',
                                    help='Run prechecks on the PostgreSQL '
@@ -295,6 +328,15 @@ def add_subcommands(subparsers):
     parser = subparsers.add_parser(
         'migrate',
         help='Migrate data from PostgreSQL to MariaDB')
+
+    parser.add_argument("--chunked",
+                        action='store_true',
+                        default=False,
+                        help='split table migrations into chucks of records '
+                             'at a time.')
+    parser.add_argument("--chunk-size", "-s",
+                        default=10000,
+                        help='Number of records to move per chunk.')
     parser.set_defaults(func=do_migration)
 
 
