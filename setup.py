@@ -24,6 +24,7 @@ setup(
         'psycopg2',
         'prettytable',
         'PyMySQL',
+        'PyYAML',
         'rfc3986',
         'SQLAlchemy<1.1.0,>=1.0.10',
     ],
