@@ -14,8 +14,15 @@ be easy to add however.
 
 # Usage
 
-## Install Requirements
-```pip install -r requirements.txt```
+## Installation
+
+```
+mkdir venv
+virtualenv venv
+. venv/bin/activate
+pip install -r requirements.txt
+python setup.py install
+```
 
 ## Prerequisites
 * Before using `psql2mysql` for migration, the destination database and all

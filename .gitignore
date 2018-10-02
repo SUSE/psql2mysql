@@ -1,3 +1,5 @@
 **/*.pyc
 .eggs
 psql2mysql.egg-info
+dist
+build
