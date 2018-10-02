@@ -25,7 +25,7 @@ from prettytable import PrettyTable
 from rfc3986 import uri_reference
 from sqlalchemy import create_engine, MetaData, or_, text, types
 from sqlalchemy import exc as sa_exc
-from datetime2decimal import PreciseTimestamp
+from psql2mysql.datetime2decimal import PreciseTimestamp
 
 LOG = logging.getLogger(__name__)
 
