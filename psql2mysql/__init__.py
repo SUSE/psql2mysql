@@ -305,17 +305,11 @@ def add_subcommands(subparsers):
     parser = subparsers.add_parser('precheck',
                                    help='Run prechecks on the PostgreSQL '
                                         'database')
-    parser.add_argument("mariadb-utf8",
-                        action='store_true',
-                        default=True,
-                        help='Check all string columns for incompatibilities '
-                             'with mysql\'s utf8 encoding.')
     parser.set_defaults(func=do_prechecks)
 
     parser = subparsers.add_parser(
         'migrate',
         help='Migrate data from PostgreSQL to MariaDB')
-
     parser.set_defaults(func=do_migration)
 
 
