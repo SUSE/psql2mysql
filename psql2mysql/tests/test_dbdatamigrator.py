@@ -46,17 +46,27 @@ class TestDbDataMigrator(unittest.TestCase):
         chunk_size = 10
         dbdatamigrator = psql2mysql.DbDataMigrator(None, 'source', 'target',
                                                    chunk_size)
-        dbdatamigrator.setup()
-        calls = (mock.call('source', chunk_size), mock.call().connect(),
-                 mock.call('target', chunk_size), mock.call().connect())
+        dbdatamigrator.src_db
+        calls = (mock.call('source', chunk_size), mock.call().connect())
+        dbwrapper_mock.assert_has_calls(calls)
+        dbwrapper_mock.reset_mock()
+
+        # Don't call reconnect on subsequent calls
+        dbdatamigrator.src_db
+        dbwrapper_mock.assert_not_called()
+        dbwrapper_mock.call().connect().assert_not_called()
+        dbwrapper_mock.reset_mock()
+
+        dbdatamigrator.target_db
+        calls = (mock.call('target', chunk_size), mock.call().connect())
         dbwrapper_mock.assert_has_calls(calls)
 
     def test_migrate_no_tables(self):
         chunk_size = 10
         dbdatamigrator = psql2mysql.DbDataMigrator(None, 'source', 'target',
                                                    chunk_size)
-        dbdatamigrator.src_db = mock.MagicMock()
-        dbdatamigrator.target_db = mock.MagicMock()
+        dbdatamigrator._src_db = mock.MagicMock()
+        dbdatamigrator._target_db = mock.MagicMock()
         dbdatamigrator.src_db.getSortedTables.return_value = []
         with self.assertRaises(psql2mysql.SourceDatabaseEmpty):
             dbdatamigrator.migrate()
@@ -69,8 +79,8 @@ class TestDbDataMigrator(unittest.TestCase):
         chunk_size = 10
         dbdatamigrator = psql2mysql.DbDataMigrator(None, 'source', 'target',
                                                    chunk_size)
-        dbdatamigrator.src_db = mock.MagicMock()
-        dbdatamigrator.target_db = mock.MagicMock()
+        dbdatamigrator._src_db = mock.MagicMock()
+        dbdatamigrator._target_db = mock.MagicMock()
         table = namedtuple('Table', ['name', 'columns'])
         alembic_migration = table('alembic_migration', [])
         migrate_version = table('migrate_version', [])
@@ -89,11 +99,11 @@ class TestDbDataMigrator(unittest.TestCase):
         table = namedtuple('Table', ['name', 'columns'])
         foo = table('foo', [])
         table_result = namedtuple('TableResult', ['returns_rows', 'rowcount'])
-        dbdatamigrator.src_db = mock.MagicMock()
+        dbdatamigrator._src_db = mock.MagicMock()
         dbdatamigrator.src_db.getSortedTables.return_value = [foo]
         dbdatamigrator.src_db.readTableRows.return_value = table_result(
             ['foo', 'bar'], 1)
-        dbdatamigrator.target_db = mock.MagicMock()
+        dbdatamigrator._target_db = mock.MagicMock()
         dbdatamigrator.target_db.getTables.return_value = {'foo': foo}
         dbdatamigrator.target_db.getSortedTables.return_value = [foo]
         dbdatamigrator.migrate()
@@ -108,9 +118,9 @@ class TestDbDataMigrator(unittest.TestCase):
         table = namedtuple('Table', ['name', 'columns'])
         foo = table('foo', [])
         bar = table('bar', [])
-        dbdatamigrator.src_db = mock.MagicMock()
+        dbdatamigrator._src_db = mock.MagicMock()
         dbdatamigrator.src_db.getSortedTables.return_value = [bar, foo]
-        dbdatamigrator.target_db = mock.MagicMock()
+        dbdatamigrator._target_db = mock.MagicMock()
         dbdatamigrator.target_db.getTables.return_value = {'foo': foo}
         dbdatamigrator.target_db.getSortedTables.return_value = [foo]
         with self.assertRaisesRegexp(

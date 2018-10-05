@@ -217,13 +217,22 @@ class DbDataMigrator(object):
         self.src_uri = source if source else cfg.CONF.source
         self.target_uri = target if target else cfg.CONF.target
         self.chunk_size = chunk_size if chunk_size else cfg.CONF.chunk_size
+        self._src_db = None
+        self._target_db = None
 
-    def setup(self):
-        self.src_db = DbWrapper(self.src_uri, self.chunk_size)
-        self.src_db.connect()
+    @property
+    def src_db(self):
+        if not self._src_db:
+            self._src_db = DbWrapper(self.src_uri, self.chunk_size)
+            self._src_db.connect()
+        return self._src_db
 
-        self.target_db = DbWrapper(self.target_uri, self.chunk_size)
-        self.target_db.connect()
+    @property
+    def target_db(self):
+        if not self._target_db:
+            self._target_db = DbWrapper(self.target_uri, self.chunk_size)
+            self._target_db.connect()
+        return self._target_db
 
     def migrate(self):
         source_tables = self.src_db.getSortedTables()
@@ -373,7 +382,6 @@ def do_prechecks(config, source, target):
 
 def do_migration(config, source, target):
     migrator = DbDataMigrator(config, source, target)
-    migrator.setup()
     try:
         migrator.migrate()
     except SourceDatabaseEmpty:
