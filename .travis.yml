@@ -12,6 +12,12 @@ matrix:
     - name: "Python 2.7 flake8"
       python: "2.7"
       script: flake8 --filename="*.py"
+    - name: "Python 3.5 tests"
+      python: "3.5"
+      script: nosetests
+    - name: "Python 3.5 flake8"
+      python: "3.5"
+      script: flake8 --filename="*.py"
     - name: "Python 3.6 tests"
       python: "3.6"
       script: nosetests
