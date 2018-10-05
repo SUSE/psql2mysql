@@ -234,6 +234,22 @@ class DbDataMigrator(object):
             self._target_db.connect()
         return self._target_db
 
+    def purgeTables(self):
+        target_tables = self.target_db.getTables()
+        if not target_tables:
+            return
+
+        # disable constraints on the MariaDB side for the duration of
+        # the migration
+        LOG.info("Disabling constraints on target database")
+        self.target_db.disable_constraints()
+
+        for table in self.target_db.getSortedTables():
+            if (table.name == "migrate_version" or
+                    table.name.startswith("alembic_")):
+                continue
+            self.target_db.clearTable(table)
+
     def migrate(self):
         source_tables = self.src_db.getSortedTables()
         target_tables = self.target_db.getTables()
@@ -248,13 +264,6 @@ class DbDataMigrator(object):
         # the migration
         LOG.info("Disabling constraints on target DB for the migration")
         self.target_db.disable_constraints()
-
-        # FIXME: Make this optional
-        for table in self.target_db.getSortedTables():
-            if (table.name == "migrate_version" or
-                    table.name.startswith("alembic_")):
-                continue
-            self.target_db.clearTable(table)
 
         for table in source_tables:
             LOG.info("Migrating table: '%s'" % table.name)
@@ -321,6 +330,11 @@ def add_subcommands(subparsers):
         help='Migrate data from PostgreSQL to MariaDB')
     parser.set_defaults(func=do_migration)
 
+    parser = subparsers.add_parser(
+        'purge-tables',
+        help='Purge all data from the tables in the target database')
+    parser.set_defaults(func=do_purge_tables)
+
 
 def do_prechecks(config, source, target):
     src_uri = source if source else cfg.CONF.source
@@ -383,6 +397,7 @@ def do_prechecks(config, source, target):
 def do_migration(config, source, target):
     migrator = DbDataMigrator(config, source, target)
     try:
+        migrator.purgeTables()
         migrator.migrate()
     except SourceDatabaseEmpty:
         print("The source database doesn't contain any Tables. "
@@ -392,6 +407,11 @@ def do_migration(config, source, target):
               "sure to create the Schema in the target database before "
               "starting the migration.")
         sys.exit(1)
+
+
+def do_purge_tables(config, source, target):
+    migrator = DbDataMigrator(config, source, target)
+    migrator.purgeTables()
 
 
 # restrict the source database to postgresql for now

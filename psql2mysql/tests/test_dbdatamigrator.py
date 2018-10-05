@@ -108,7 +108,6 @@ class TestDbDataMigrator(unittest.TestCase):
         dbdatamigrator.target_db.getSortedTables.return_value = [foo]
         dbdatamigrator.migrate()
         dbdatamigrator.src_db.readTableRows.assert_called_with(foo)
-        dbdatamigrator.target_db.clearTable.assert_called_with(foo)
         dbdatamigrator.target_db.writeTableRows.assert_called_once()
 
     def test_migrate_target_missing(self):
@@ -127,3 +126,14 @@ class TestDbDataMigrator(unittest.TestCase):
                 psql2mysql.Psql2MysqlRuntimeError,
                 "^Table 'bar' does not exist in target database$"):
             dbdatamigrator.migrate()
+
+    def test_purge_tables(self):
+        chunk_size = 10
+        dbdatamigrator = psql2mysql.DbDataMigrator(None, 'source', 'target',
+                                                   chunk_size)
+        table = namedtuple('Table', ['name', 'columns'])
+        foo = table('foo', [])
+        dbdatamigrator._target_db = mock.MagicMock()
+        dbdatamigrator.target_db.getSortedTables.return_value = [foo]
+        dbdatamigrator.purgeTables()
+        dbdatamigrator.target_db.clearTable.assert_called_once()
