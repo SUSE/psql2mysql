@@ -82,3 +82,32 @@ class TestDbWrapper(unittest.TestCase):
         wrong_item = result[0]
         self.assertEqual("text", wrong_item["column"])
         self.assertEqual("id=3", wrong_item["primary"][0])
+
+    def test_chunked_write_table_rows(self):
+        mock_table = mock.MagicMock()
+        mock_connection = mock.MagicMock()
+        mock_rows = mock.MagicMock()
+        mock_rows.fetchmany.side_effect = [['one response'],
+                                           ['second response'], []]
+
+        self.db_wrapper.chunk_size = 1
+        self.db_wrapper.connection = mock_connection
+        self.db_wrapper.writeTableRows(mock_table, mock_rows)
+
+        self.assertEqual(mock_rows.fetchmany.call_count, 3)
+        self.assertFalse(mock_rows.fetchall.called)
+        self.assertEqual(mock_connection.execute.call_count, 2)
+
+    def test_full_table_write_table_rows(self):
+        mock_table = mock.MagicMock()
+        mock_connection = mock.MagicMock()
+        mock_rows = mock.MagicMock()
+        mock_rows.fetchall.side_effect = [['one response'], ]
+        self.db_wrapper.connection = mock_connection
+        self.db_wrapper.chunk_size = 0
+
+        self.db_wrapper.writeTableRows(mock_table, mock_rows)
+
+        self.assertTrue(mock_rows.fetchall.called)
+        self.assertFalse(mock_rows.fetchmany.called)
+        self.assertTrue(mock_connection.execute.called)

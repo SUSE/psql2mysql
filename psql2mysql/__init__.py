@@ -51,8 +51,9 @@ def lookupTypeDecorator(srcType, destType):
 
 
 class DbWrapper(object):
-    def __init__(self, uri=""):
+    def __init__(self, uri="", chunk_size=0):
         self.uri = uri
+        self.chunk_size = chunk_size
 
     def connect(self):
         self.engine = create_engine(self.uri)
@@ -174,12 +175,16 @@ class DbWrapper(object):
         )
 
     def writeTableRows(self, table, rows):
-        # FIXME: Allow to process this in batches instead one possibly
-        # huge transcation?
-        self.connection.execute(
-            table.insert(),
-            rows.fetchall()
-        )
+        if self.chunk_size > 0:
+            chunk = rows.fetchmany(self.chunk_size)
+            while chunk:
+                self.connection.execute(table.insert(), chunk)
+                chunk = rows.fetchmany(self.chunk_size)
+        else:
+            self.connection.execute(
+                table.insert(),
+                rows.fetchall()
+            )
 
     def clearTable(self, table):
         self.connection.execute(table.delete())
@@ -194,16 +199,22 @@ class TargetDatabaseEmpty(Exception):
 
 
 class DbDataMigrator(object):
-    def __init__(self, config, source, target):
+    def __init__(self, config, source, target, chunk_size=None):
         self.cfg = config
         self.src_uri = source if source else cfg.CONF.source
         self.target_uri = target if target else cfg.CONF.target
+        try:
+            self.chunk_size = positive_int(chunk_size) \
+                if chunk_size is not None else cfg.CONF.chunk_size
+        except ValueError as e:
+            LOG.error(str(e))
+            raise
 
     def setup(self):
-        self.src_db = DbWrapper(self.src_uri)
+        self.src_db = DbWrapper(self.src_uri, self.chunk_size)
         self.src_db.connect()
 
-        self.target_db = DbWrapper(self.target_uri)
+        self.target_db = DbWrapper(self.target_uri, self.chunk_size)
         self.target_db.connect()
 
     def migrate(self):
@@ -281,6 +292,16 @@ class DbDataMigrator(object):
                     targetTable.c[targetCol.name].type = decorator
 
 
+def positive_int(value):
+    try:
+        if int(value) >= 0:
+            return int(value)
+        else:
+            raise ValueError()
+    except (ValueError, TypeError):
+        raise ValueError("{} must be a positive integer".format(value))
+
+
 def add_subcommands(subparsers):
     parser = subparsers.add_parser('precheck',
                                    help='Run prechecks on the PostgreSQL '
@@ -295,6 +316,7 @@ def add_subcommands(subparsers):
     parser = subparsers.add_parser(
         'migrate',
         help='Migrate data from PostgreSQL to MariaDB')
+
     parser.set_defaults(func=do_migration)
 
 
@@ -411,7 +433,11 @@ def main():
         cfg.BoolOpt('exclude-deleted',
                     default=True,
                     help='Exclude table rows marked as deleted. '
-                         'True by default.')
+                         'True by default.'),
+        cfg.IntOpt('chunk-size',
+                   default=10000,
+                   min=0,
+                   help='Number of records to move per chunk.')
     ]
 
     cfg.CONF.register_cli_opts(cli_opts)
