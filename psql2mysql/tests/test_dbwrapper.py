@@ -111,3 +111,34 @@ class TestDbWrapper(unittest.TestCase):
         self.assertTrue(mock_rows.fetchall.called)
         self.assertFalse(mock_rows.fetchmany.called)
         self.assertTrue(mock_connection.execute.called)
+
+    def test_chunked_clear_table(self):
+        mock_table = mock.MagicMock()
+        mock_table.name = "Table"
+        mock_connection = mock.MagicMock()
+        Result = namedtuple("Result", ["rowcount"])
+        mock_connection.execute.side_effect = [
+            Result(10), Result(5), Result(0)
+        ]
+
+        self.db_wrapper.chunk_size = 10
+        self.db_wrapper.connection = mock_connection
+        self.db_wrapper.clearTable(mock_table)
+
+        self.assertFalse(mock_table.delete.called)
+        self.assertEqual(mock_connection.execute.call_count, 3)
+        mock_connection.execute.assert_called_with(
+            "DELETE FROM `%s` LIMIT %d" % (mock_table.name,
+                                           self.db_wrapper.chunk_size))
+
+    def test_full_clear_table(self):
+        mock_table = mock.MagicMock()
+        mock_connection = mock.MagicMock()
+
+        self.db_wrapper.connection = mock_connection
+        self.db_wrapper.chunk_size = 0
+
+        self.db_wrapper.clearTable(mock_table)
+
+        self.assertTrue(mock_table.delete.called)
+        self.assertTrue(mock_connection.execute.called_once)
