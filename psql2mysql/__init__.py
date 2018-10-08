@@ -445,10 +445,10 @@ def main():
     logging.set_defaults()
 
     # read config and initialize logging
-    cfg.CONF(project='pg2my')
+    cfg.CONF(project='psql2mysql')
 #    cfg.CONF.set_override("use_stderr", True)
 
-    logging.setup(cfg.CONF, 'pg2my')
+    logging.setup(cfg.CONF, 'psql2mysql')
 
     # We expect batch file with this syntax:
     #
