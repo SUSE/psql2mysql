@@ -100,30 +100,3 @@ class TestDbDataMigrator(unittest.TestCase):
         dbdatamigrator.src_db.readTableRows.assert_called_with(foo)
         dbdatamigrator.target_db.clearTable.assert_called_with(foo)
         dbdatamigrator.target_db.writeTableRows.assert_called_once()
-
-    @mock.patch('psql2mysql.DbWrapper')
-    @mock.patch('psql2mysql.cfg.CONF')
-    def test_chuck_size(self, cfg_mock, dbwrapper_mock):
-        def test(chunk_size, expected):
-            if isinstance(expected, ValueError):
-                self.assertRaises(ValueError, psql2mysql.DbDataMigrator,
-                                  None, None, None, chunk_size)
-            else:
-                dbdatamigrator = psql2mysql.DbDataMigrator(None, None, None,
-                                                           chunk_size)
-                self.assertEqual(dbdatamigrator.chunk_size, expected)
-
-        dbwrapper_mock.connect.return_value = None
-        tests = ({"chunk_size": -1, "expected": ValueError()},
-                 {"chunk_size": "-1", "expected": ValueError()},
-                 {"chunk_size": "", "expected": ValueError()},
-                 {"chunk_size": 'not an int', "expected": ValueError()},
-                 {"chunk_size": 0, "expected": 0},
-                 {"chunk_size": "0", "expected": 0},
-                 {"chunk_size": "-0", "expected": 0},
-                 {"chunk_size": "+0", "expected": 0},
-                 {"chunk_size": "1", "expected": 1},
-                 {"chunk_size": 2, "expected": 2},
-                 {"chunk_size": "5", "expected": 5})
-        for params in tests:
-            test(**params)

@@ -203,12 +203,7 @@ class DbDataMigrator(object):
         self.cfg = config
         self.src_uri = source if source else cfg.CONF.source
         self.target_uri = target if target else cfg.CONF.target
-        try:
-            self.chunk_size = positive_int(chunk_size) \
-                if chunk_size is not None else cfg.CONF.chunk_size
-        except ValueError as e:
-            LOG.error(str(e))
-            raise
+        self.chunk_size = chunk_size if chunk_size else cfg.CONF.chunk_size
 
     def setup(self):
         self.src_db = DbWrapper(self.src_uri, self.chunk_size)
@@ -290,16 +285,6 @@ class DbDataMigrator(object):
                              col.name, col.type, targetCol.type,
                              decorator.__name__)
                     targetTable.c[targetCol.name].type = decorator
-
-
-def positive_int(value):
-    try:
-        if int(value) >= 0:
-            return int(value)
-        else:
-            raise ValueError()
-    except (ValueError, TypeError):
-        raise ValueError("{} must be a positive integer".format(value))
 
 
 def add_subcommands(subparsers):
@@ -437,7 +422,8 @@ def main():
         cfg.IntOpt('chunk-size',
                    default=10000,
                    min=0,
-                   help='Number of records to move per chunk.')
+                   help='Number of records to move per chunk. Set to 0 to '
+                        'disable, default is 10,000.')
     ]
 
     cfg.CONF.register_cli_opts(cli_opts)
