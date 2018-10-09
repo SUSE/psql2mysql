@@ -1,5 +1,6 @@
 oslo.config
 oslo.log
+pbr
 psycopg2
 prettytable
 PyMySQL
