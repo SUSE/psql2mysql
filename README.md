@@ -53,6 +53,17 @@ python setup.py install
     Runs the acutal migration. Will go through, the database table by table
     and migrate all rows to the target database.
 
+* `purge-tables`
+
+    Purges all tables in the target database. Tables with names related to
+    alembic and SQLalchemy-migrate are skipped and not purged. This subcommand
+    can be executed optionally after a failed migration attempt. The `migrate`
+    subcommand will also purge all tables in the target database in the same
+    way before it starts to copy any data from the source database. But as
+    that operation can take a significant amount of time it might make sense
+    to run the `purge-tables` subcommand separately before `migrate` in order
+    to reduce the overall downtime of the source database.
+
 ### Options
 
 * `exclude-deleted`
