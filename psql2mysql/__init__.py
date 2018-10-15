@@ -504,6 +504,10 @@ def main():
         print("Batch processing done.")
         sys.exit(0)
 
+    if not cfg.CONF.source:
+        print("Source database was not specified.")
+        sys.exit(1)
+
     check_source_schema(cfg.CONF.source)
 
     if cfg.CONF.target:
