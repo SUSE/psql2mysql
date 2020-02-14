@@ -246,7 +246,7 @@ class DbDataMigrator(object):
 
         for table in self.target_db.getSortedTables():
             if (table.name == "migrate_version" or
-                    table.name.startswith("alembic_")):
+                    "alembic_" in table.name):
                 continue
             self.target_db.clearTable(table)
 
@@ -278,7 +278,7 @@ class DbDataMigrator(object):
             # FIXME: Should we put this into a config setting
             # (e.g. --skiptables?)
             if (table.name == "migrate_version" or
-                    table.name.startswith("alembic_")):
+                    "alembic_" in table.name):
                 continue
 
             result = self.src_db.readTableRows(table)
