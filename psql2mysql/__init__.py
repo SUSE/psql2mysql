@@ -54,6 +54,7 @@ class DbWrapper(object):
     def __init__(self, uri="", chunk_size=0):
         self.uri = uri
         self.chunk_size = chunk_size
+        self.db_path = uri_reference(uri).path
 
     def connect(self):
         self.engine = create_engine(self.uri)
@@ -98,6 +99,15 @@ class DbWrapper(object):
         rows = q.execute()
         return rows
 
+    # For some cases MySQL is expecting LONGTEXT instead of TEXT.
+    # We do not need to report such values as too long.
+    def longtextExpected(self, table_name, column):
+        if (self.db_path == "/ironic" and table_name == "nodes"
+           and column == "instance_info"):
+            LOG.debug("Column %s is expected to be LONGTEXT.", column)
+            return True
+        return False
+
     def scanTableForLongTexts(self, table):
         textColumns = self.getTextColumns(table)
         if not textColumns:
@@ -112,6 +122,8 @@ class DbWrapper(object):
         for row in rows:
             for col in textColumns:
                 if not isinstance(row[col], six.string_types):
+                    continue
+                if self.longtextExpected(table.name, col):
                     continue
                 if len(row[col]) > MAX_TEXT_LEN:
                     long_values.append({
@@ -368,8 +380,8 @@ def do_prechecks(config, source, target):
         long_values = db.scanTableForLongTexts(table)
         if long_values:
             print("Table '%s' contains TEXT values that are more than %s "
-                  "characters long. This is incompatible with MariaDB setup.",
-                  table.name, MAX_TEXT_LEN)
+                  "characters long. This is incompatible with MariaDB setup." %
+                  (table.name, MAX_TEXT_LEN))
             print("The following rows are affected:")
 
             output_table = PrettyTable()

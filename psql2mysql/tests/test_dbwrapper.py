@@ -30,7 +30,7 @@ import psql2mysql
 
 class TestDbWrapper(unittest.TestCase):
     def setUp(self):
-        self.db_wrapper = psql2mysql.DbWrapper()
+        self.db_wrapper = psql2mysql.DbWrapper("postgresql://u:p@host/ironic")
 
     FakeColumn = namedtuple('FakeColumn', ['name', 'type'])
     FakePrimary = namedtuple('FakePrimary', ['name'])
@@ -82,6 +82,31 @@ class TestDbWrapper(unittest.TestCase):
         wrong_item = result[0]
         self.assertEqual("text", wrong_item["column"])
         self.assertEqual("id=3", wrong_item["primary"][0])
+
+    @mock.patch('psql2mysql.DbWrapper.getTextColumns')
+    @mock.patch('psql2mysql.DbWrapper._query_long_text_rows')
+    def test_scanIronicTableForLongTexts(self, mock_query_long_text_rows,
+                                         mock_getTextColumns):
+        table = self.FakeTable("nodes", [], [self.FakePrimary("id")])
+        mock_getTextColumns.return_value = ["text", "instance_info"]
+        mock_query_long_text_rows.return_value = [
+            {"text": "normal size text", "id": 1, "instance_info": ""},
+            # text item that is too long:
+            {
+                "text": u"a"*(psql2mysql.MAX_TEXT_LEN+1), "id": 2,
+                "instance_info": ""
+            },
+            # instance_info item that is too long, but it's not an error:
+            {
+                "text": "normal size text", "id": 3,
+                "instance_info": u"a"*(psql2mysql.MAX_TEXT_LEN+1)
+            }
+        ]
+        result = self.db_wrapper.scanTableForLongTexts(table)
+        self.assertEqual(len(result), 1)
+        wrong_item = result[0]
+        self.assertEqual("text", wrong_item["column"])
+        self.assertEqual("id=2", wrong_item["primary"][0])
 
     def test_chunked_write_table_rows(self):
         mock_table = mock.MagicMock()
